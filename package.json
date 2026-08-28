@@ -1,0 +1,11 @@
+{
+  "name": "pandexai",
+  "version": "0.0.1",
+  "description": "PandexAI — AI-native data profiling CLI. Placeholder release, full version coming soon.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jahirulanik/pandexai.git"
+  },
+  "keywords": ["pandas", "data", "cli", "ai"]
+}
