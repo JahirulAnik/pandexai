@@ -1,11 +1,20 @@
 {
   "name": "pandexai",
-  "version": "0.0.1",
-  "description": "PandexAI — AI-native data profiling CLI. Placeholder release, full version coming soon.",
+  "version": "0.1.0",
+  "description": "PandexAI - AI-native data profiling CLI. Run pandex init inside your project to get started.",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/jahirulanik/pandexai.git"
   },
-  "keywords": ["pandas", "data", "cli", "ai"]
+  "keywords": ["pandas", "data", "cli", "ai"],
+  "bin": {
+    "pandex": "./bin/pandex.js"
+  },
+  "files": [
+    "bin",
+    "SKILL.md",
+    "commands",
+    "scripts"
+  ]
 }
