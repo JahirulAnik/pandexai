@@ -4,6 +4,7 @@ AI-native data profiling CLI. PandexAI runs inside AI coding CLIs (Claude Code, 
 
 ## Why
 
+
 When working with an AI CLI on messy data, a lot of the groundwork does not need an LLM at all - it just needs pandas doing pandas things. PandexAI keeps that part deterministic and trustworthy, and lets the AI focus on the part that actually needs reasoning.
 
 ## Install
