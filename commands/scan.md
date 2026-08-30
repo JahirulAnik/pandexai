@@ -13,6 +13,10 @@ categorical columns).
    Present the JSON results to the user in a clear, readable summary, and
    flag anything that looks like a data quality issue (e.g. high null %,
    suspicious types, low-cardinality columns that might be categorical).
+4. Pay special attention to duplicate_rows, duplicate_column_names,
+   duplicate_values, blank_like_count, and inconsistent_casing_example in
+   the output - these represent real data quality problems the user should
+   know about before doing any analysis.
 
 ## Example
 
