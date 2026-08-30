@@ -12,7 +12,16 @@ from checks import (
 
 
 def profile_file(path):
-    df, duplicate_column_names = load_dataframe(path)
+    df, duplicate_column_names, encoding_note = load_dataframe(path)
+
+    if len(df) == 0:
+        return {
+            "file": path,
+            "row_count": 0,
+            "column_count": len(df.columns),
+            "warning": "This file has columns but zero data rows - there is nothing to profile yet.",
+            "columns": {}
+        }
 
     result = {
         "file": path,
@@ -23,6 +32,9 @@ def profile_file(path):
         "columns": {}
     }
 
+    if encoding_note:
+        result["encoding_note"] = encoding_note
+
     for col in df.columns:
         series = df[col]
         col_info = {
@@ -31,6 +43,10 @@ def profile_file(path):
             "null_percent": round(float(series.isnull().mean() * 100), 2),
             "unique_count": int(series.nunique())
         }
+
+        if col_info["null_percent"] == 100.0:
+            col_info["all_values_null"] = True
+            col_info["note"] = "Every value in this column is missing. Consider whether this column is still needed."
 
         if pd.api.types.is_numeric_dtype(series):
             col_info["mean"] = safe_float(series.mean())

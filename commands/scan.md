@@ -17,6 +17,13 @@ value counts for categorical columns).
    duplicate_values, blank_like_count, and inconsistent_casing_example in
    the output - these represent real data quality problems the user should
    know about before doing any analysis.
+5. If the output contains "warning" instead of "columns" data, the file has
+   no data rows - tell the user plainly rather than trying to summarize stats.
+6. If a column has "all_values_null": true, call that out clearly - it means
+   the entire column is empty and may not be worth keeping.
+7. If the output contains "encoding_note", mention to the user that the file
+   wasn't standard UTF-8 and some characters might not display correctly -
+   this is common with CSVs exported from Excel on Windows.
 
 ## Example
 
