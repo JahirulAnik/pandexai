@@ -57,7 +57,7 @@ if (installResult.status !== 0) {
 }
 
 const packageRoot = path.join(__dirname, "..");
-const filesToCopy = ["SKILL.md", "commands", "scripts"];
+const filesToCopy = ["SKILL.md", "commands", "scripts", ".claude"];
 
 function copyRecursive(src, dest) {
   const stat = fs.statSync(src);
