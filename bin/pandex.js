@@ -50,7 +50,7 @@ const venvPython = isWindows
   : path.join(venvDir, "bin", "python");
 
 console.log("Installing pandas into the virtual environment...");
-const installResult = spawnSync(venvPython, ["-m", "pip", "install", "--quiet", "pandas"], { stdio: "inherit" });
+const installResult = spawnSync(venvPython, ["-m", "pip", "install", "--quiet", "pandas", "openpyxl"], { stdio: "inherit" });
 if (installResult.status !== 0) {
   console.error("ERROR: Failed to install pandas.");
   process.exit(1);
