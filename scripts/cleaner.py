@@ -1,3 +1,4 @@
+import re
 import pandas as pd
 import numpy as np
 
@@ -58,6 +59,83 @@ def trim_whitespace(series):
     return trimmed, changed_count
 
 
+# Known category groups: a column standardizes against a group only if EVERY
+# non-null value (lowercased, stripped) falls inside that group's keys.
+# This avoids misfiring on unrelated data - it only triggers when the whole
+# column is clearly one of these concepts.
+KNOWN_CATEGORY_GROUPS = [
+    {"m": "Male", "male": "Male", "f": "Female", "female": "Female"},
+    {"y": "Yes", "yes": "Yes", "n": "No", "no": "No"},
+    {"true": "True", "t": "True", "false": "False", "f": "False"},
+]
+
+def standardize_known_categories(series):
+    """Maps common abbreviations/variants (M/Male, Y/Yes, T/True, etc.) to a
+    single canonical spelled-out form, but only when the ENTIRE column
+    matches one known group."""
+    non_null = series.dropna().astype(str)
+    if len(non_null) == 0:
+        return series, 0
+
+    lowered_unique = set(v.strip().lower() for v in non_null.unique())
+    if not lowered_unique:
+        return series, 0
+
+    for group in KNOWN_CATEGORY_GROUPS:
+        if lowered_unique.issubset(group.keys()):
+            def convert(v):
+                if isinstance(v, str):
+                    key = v.strip().lower()
+                    if key in group:
+                        return group[key]
+                return v
+            converted = series.apply(convert)
+            changed_count = int((converted.astype(str) != series.astype(str)).sum())
+            if changed_count:
+                return converted, changed_count
+            return series, 0
+
+    return series, 0
+
+
+DATE_LIKE_PATTERN = re.compile(
+    r"\d{1,4}[-/]\d{1,2}[-/]\d{1,4}|\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b",
+    re.IGNORECASE
+)
+
+def standardize_dates(series, column_name):
+    """If a column's values mostly look like dates and parse successfully,
+    reformats them all to a consistent YYYY-MM-DD form. Skipped entirely for
+    identifier-like columns (name contains 'id') to avoid false positives."""
+    if "id" in column_name.lower():
+        return series, 0
+
+    non_null = series.dropna().astype(str)
+    if len(non_null) == 0:
+        return series, 0
+
+    looks_like_dates = non_null.str.contains(DATE_LIKE_PATTERN, na=False).mean() >= 0.5
+    if not looks_like_dates:
+        return series, 0
+
+    parsed = pd.to_datetime(non_null, errors="coerce", format="mixed")
+    success_rate = parsed.notna().mean()
+    if success_rate < 0.9:
+        return series, 0
+
+    def convert(v):
+        if pd.isna(v):
+            return v
+        dt = pd.to_datetime(str(v), errors="coerce", format="mixed")
+        if pd.isna(dt):
+            return v
+        return dt.strftime("%Y-%m-%d")
+
+    converted = series.apply(convert)
+    changed_count = int((converted.astype(str) != series.astype(str)).sum())
+    return converted, changed_count
+
+
 def fill_missing(series):
     """Fill missing values: median for numeric columns, 'Unknown' for text columns."""
     null_count = int(series.isnull().sum())
@@ -95,6 +173,14 @@ def clean_dataframe(df):
             if trim_changed:
                 col_report["whitespace_trimmed"] = trim_changed
 
+            series, date_changed = standardize_dates(series, str(col))
+            if date_changed:
+                col_report["dates_standardized"] = date_changed
+
+            series, category_changed = standardize_known_categories(series)
+            if category_changed:
+                col_report["categories_standardized"] = category_changed
+
             series, casing_changed = standardize_casing(series)
             if casing_changed:
                 col_report["casing_standardized"] = casing_changed
@@ -108,11 +194,10 @@ def clean_dataframe(df):
         if col_report:
             report["columns_cleaned"][str(col)] = col_report
 
-    # Remove duplicate rows LAST, after normalization, so near-duplicates
-    # that only differed by casing/blanks/whitespace are caught too.
     before = len(df)
     df = df.drop_duplicates(keep="first").reset_index(drop=True)
     report["duplicate_rows_removed"] = before - len(df)
 
     report["final_row_count"] = len(df)
     return df, report
+
