@@ -1,6 +1,7 @@
 import sys
 import os
 import json
+import pandas as pd
 from loaders import load_dataframe
 from cleaner import clean_dataframe
 
@@ -42,6 +43,37 @@ def clean_file(path):
 
     return report
 
+
+def friendly_error_message(e, path):
+    """Translates common exceptions into plain-English messages."""
+    if isinstance(e, FileNotFoundError):
+        return f"Couldn't find a file at '{path}'. Check the file name and make sure it's in this folder."
+
+    if isinstance(e, PermissionError):
+        return f"Couldn't open '{path}' - it might be open in another program (like Excel). Close it and try again."
+
+    if isinstance(e, pd.errors.EmptyDataError):
+        return "This file has no columns or rows - there is no data to clean."
+
+    if isinstance(e, pd.errors.ParserError):
+        return f"'{path}' doesn't look like a valid, well-formed file. It may be corrupted or use an unusual format."
+
+    if isinstance(e, UnicodeDecodeError):
+        return f"Couldn't read the text in '{path}' - it may use an unusual character encoding."
+
+    if isinstance(e, IsADirectoryError):
+        return f"'{path}' is a folder, not a file. Point this at a specific file instead."
+
+    message = str(e)
+    lower_message = message.lower()
+    if "zip file" in lower_message or "not a zip file" in lower_message or "file format cannot be determined" in lower_message or "engine manually" in lower_message:
+        return f"'{path}' doesn't look like a valid Excel file. It may be corrupted or actually a different file type with a .xlsx extension."
+    if "expecting value" in lower_message or "json" in lower_message:
+        return f"'{path}' doesn't look like valid JSON. Check the file's formatting."
+
+    return message
+
+
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         print(json.dumps({"error": "Usage: python clean.py <path-to-file>"}))
@@ -52,5 +84,7 @@ if __name__ == "__main__":
         result = clean_file(file_path)
         print(json.dumps(result, indent=2))
     except Exception as e:
-        print(json.dumps({"error": str(e)}))
+        print(json.dumps({"error": friendly_error_message(e, file_path)}))
         sys.exit(1)
+
+
