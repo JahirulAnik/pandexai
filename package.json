@@ -1,6 +1,6 @@
 {
   "name": "pandexai",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "PandexAI - AI-native data profiling CLI. Run pandex init inside your project to get started.",
   "license": "MIT",
   "repository": {
