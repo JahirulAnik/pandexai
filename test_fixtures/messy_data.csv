@@ -1,0 +1,7 @@
+customer_id,region,amount,signup_date,gender
+1,North,100.50,2024-01-05,M
+2,south,200.00,01/06/2024,Male
+3,North,150.75,N/A,f
+2,South,200.00,-,Female
+4,north ,  99.99,Jan 8 2024,male
+5,East,,null,f

@@ -1,0 +1,5 @@
+customer_id,region,amount,signup_date
+1,North,100.5,2024-01-05
+2,South,200.0,2024-01-06
+3,East,150.75,2024-01-07
+4,West,300.25,2024-01-08
