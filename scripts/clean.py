@@ -9,12 +9,28 @@ def build_output_path(path):
     base, ext = os.path.splitext(path)
     return f"{base}_cleaned{ext}"
 
+def add_excel_autofilter(path, row_count, column_count):
+    """Adds Excel's AutoFilter dropdowns to the header row, so the user can
+    sort ascending/descending or filter to specific values directly in Excel."""
+    from openpyxl import load_workbook
+    from openpyxl.utils import get_column_letter
+
+    workbook = load_workbook(path)
+    worksheet = workbook.active
+
+    last_column_letter = get_column_letter(column_count)
+    last_row = row_count + 1
+    worksheet.auto_filter.ref = f"A1:{last_column_letter}{last_row}"
+
+    workbook.save(path)
+
 def save_dataframe(df, path):
     ext = os.path.splitext(path)[1].lower()
     if ext == ".csv":
         df.to_csv(path, index=False)
     elif ext in (".xlsx", ".xls"):
         df.to_excel(path, index=False)
+        add_excel_autofilter(path, len(df), len(df.columns))
     elif ext == ".json":
         df.to_json(path, orient="records", indent=2)
     else:
@@ -86,5 +102,3 @@ if __name__ == "__main__":
     except Exception as e:
         print(json.dumps({"error": friendly_error_message(e, file_path)}))
         sys.exit(1)
-
-
