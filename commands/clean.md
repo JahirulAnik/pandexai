@@ -12,16 +12,20 @@ Diagnoses AND cleans a CSV, Excel (.xlsx/.xls), or JSON file:
 The original file is NEVER modified. Instead, a results folder is created
 next to it, named "<name>_cleaned_results", containing:
 
-- cleaned.<ext>         - the final cleaned data (always created)
-- duplicates.<ext>      - only if duplicates were found. Every row involved
-                          in a duplicate (all copies), tagged with a
-                          "duplicate_group" number so matching rows are clear.
-- missing_values.<ext>  - only if some rows had missing values. Original
-                          rows (before filling), tagged with a
-                          "missing_columns" column listing which fields were blank.
-- empty_rows.<ext>      - only if some rows were COMPLETELY blank.
+- cleaned.<ext>       - the final cleaned data, same file type as the input
+                        (always created)
+- duplicates.xlsx     - only if exact duplicates were found. Always .xlsx
+                        with AutoFilter, regardless of the input file type,
+                        since this is meant for a human to review in Excel.
+                        Has a "reason" column explaining the match.
+- conflicts.xlsx      - only if same-ID rows with differing data were found.
+                        Always .xlsx. Has a "reason" column listing which
+                        fields differ.
+- missing_values.xlsx - only if some rows had missing values. Always .xlsx.
+                        Has a "reason" column listing which fields were blank.
+- empty_rows.xlsx     - only if some rows were COMPLETELY blank. Always .xlsx.
 
-All Excel files include AutoFilter dropdowns on the header row.
+All .xlsx review files have AutoFilter dropdowns and auto-sized columns.
 
 ## How to run this command
 
@@ -30,10 +34,11 @@ All Excel files include AutoFilter dropdowns on the header row.
 2. The script prints a JSON report. Fields to look for:
    - output_folder: the results folder that was created
    - cleaned_file: path to the main cleaned file
-   - duplicates_file / missing_values_file / empty_rows_file: present only
-     if that category had data
+   - duplicates_file / conflicts_file / missing_values_file / empty_rows_file:
+     present only if that category had data
    - columns_cleaned: per-column details of what was changed
-   - duplicate_rows_removed, rows_with_missing_values, empty_rows_removed
+   - duplicate_rows_removed, conflicting_duplicate_rows,
+     rows_with_missing_values, empty_rows_removed
 3. Do NOT recompute, estimate, or guess any of these numbers yourself.
    Present a clear summary and list every file inside the results folder.
 4. Always make clear their original file was left untouched.
@@ -44,8 +49,8 @@ All Excel files include AutoFilter dropdowns on the header row.
 
 ## Example
 
-user runs: /pandex clean sales.xlsx
--> python scripts/clean.py sales.xlsx
--> creates sales_cleaned_results/ containing cleaned.xlsx and, if applicable,
-   duplicates.xlsx, missing_values.xlsx, empty_rows.xlsx
+user runs: /pandex clean sales.csv
+-> python scripts/clean.py sales.csv
+-> creates sales_cleaned_results/ containing cleaned.csv and, if applicable,
+   duplicates.xlsx, conflicts.xlsx, missing_values.xlsx, empty_rows.xlsx
 -> present the JSON report as a readable summary, listing every file created

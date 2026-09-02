@@ -22,6 +22,13 @@ def add_excel_autofilter(path, row_count, column_count):
     last_row = row_count + 1
     worksheet.auto_filter.ref = f"A1:{last_column_letter}{last_row}"
 
+    for col_idx, col_name in enumerate(worksheet[1], start=1):
+        max_length = max(
+            [len(str(col_name.value))] +
+            [len(str(cell.value)) for cell in worksheet[get_column_letter(col_idx)][1:200] if cell.value is not None]
+        )
+        worksheet.column_dimensions[get_column_letter(col_idx)].width = min(max_length + 2, 60)
+
     workbook.save(path)
 
 def save_dataframe(df, path):
@@ -50,6 +57,11 @@ def clean_file(path):
 
     output_folder = build_output_folder(path)
 
+    # The main cleaned file keeps the original format (so it drops into the
+    # same pipeline the user already has). The review files (duplicates,
+    # conflicts, missing values, empty rows) are always saved as .xlsx with
+    # AutoFilter and auto-sized columns, since they're meant for a human to
+    # open and review in Excel - this avoids the raw-CSV display mess.
     cleaned_path = os.path.join(output_folder, f"cleaned{ext}")
     save_dataframe(cleaned_df, cleaned_path)
     report["file"] = path
@@ -57,22 +69,22 @@ def clean_file(path):
     report["cleaned_file"] = cleaned_path
 
     if len(duplicates_df) > 0:
-        duplicates_path = os.path.join(output_folder, f"duplicates{ext}")
+        duplicates_path = os.path.join(output_folder, "duplicates.xlsx")
         save_dataframe(duplicates_df, duplicates_path)
         report["duplicates_file"] = duplicates_path
 
     if len(conflicts_df) > 0:
-        conflicts_path = os.path.join(output_folder, f"conflicts{ext}")
+        conflicts_path = os.path.join(output_folder, "conflicts.xlsx")
         save_dataframe(conflicts_df, conflicts_path)
         report["conflicts_file"] = conflicts_path
 
     if len(missing_df) > 0:
-        missing_path = os.path.join(output_folder, f"missing_values{ext}")
+        missing_path = os.path.join(output_folder, "missing_values.xlsx")
         save_dataframe(missing_df, missing_path)
         report["missing_values_file"] = missing_path
 
     if len(empty_rows_df) > 0:
-        empty_path = os.path.join(output_folder, f"empty_rows{ext}")
+        empty_path = os.path.join(output_folder, "empty_rows.xlsx")
         save_dataframe(empty_rows_df, empty_path)
         report["empty_rows_file"] = empty_path
 
