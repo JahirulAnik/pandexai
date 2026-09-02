@@ -130,6 +130,12 @@ def fill_missing(series):
         filled = series.fillna("Unknown")
         return filled, null_count
 
+def find_id_column(columns):
+    for col in columns:
+        if "id" in str(col).lower():
+            return col
+    return None
+
 def clean_dataframe(df):
     report = {
         "original_row_count": len(df),
@@ -138,6 +144,7 @@ def clean_dataframe(df):
 
     original_df = df.copy()
     working = df.copy()
+    id_col = find_id_column(working.columns)
 
     for col in working.columns:
         series = working[col]
@@ -168,20 +175,26 @@ def clean_dataframe(df):
         if col_report:
             report["columns_cleaned"][str(col)] = col_report
 
-    is_empty_row = working.isna().all(axis=1)
+    # A row counts as "fully empty" if every non-ID column is blank.
+    non_id_cols = [c for c in working.columns if c != id_col]
+    check_cols = non_id_cols if non_id_cols else list(working.columns)
+    is_empty_row = working[check_cols].isna().all(axis=1)
     empty_rows_df = original_df[is_empty_row].copy()
     working = working[~is_empty_row].copy()
     original_df = original_df[~is_empty_row].copy()
+    if len(empty_rows_df) > 0:
+        empty_rows_df.insert(0, "reason", "All fields empty except the ID")
 
     has_missing = working.isna().any(axis=1)
     missing_df = original_df[has_missing].copy()
     if len(missing_df) > 0:
-        missing_columns_list = []
+        reasons = []
         for idx in missing_df.index:
             cols_missing = [str(c) for c in working.columns if pd.isna(working.loc[idx, c])]
-            missing_columns_list.append(", ".join(cols_missing))
-        missing_df.insert(0, "missing_columns", missing_columns_list)
+            reasons.append("Missing values in: " + ", ".join(cols_missing))
+        missing_df.insert(0, "reason", reasons)
 
+    # Exact duplicates: every column matches (after normalization).
     dedup_key = working.fillna("__PANDEX_NULL__")
     dup_mask = dedup_key.duplicated(keep=False)
     duplicates_df = original_df[dup_mask].copy()
@@ -195,7 +208,42 @@ def clean_dataframe(df):
                 unique_keys[key] = next_id
                 next_id += 1
             group_ids.append(unique_keys[key])
-        duplicates_df.insert(0, "duplicate_group", group_ids)
+        reasons = [f"Exact duplicate - matches {n - 1} other row(s) (group {g})"
+                   for g, n in zip(group_ids, [group_tuples.tolist().count(group_tuples.tolist()[i]) for i in range(len(group_tuples))])]
+        duplicates_df.insert(0, "reason", reasons)
+
+    # Conflicting duplicates: same ID, but at least one other column differs.
+    conflicts_df = pd.DataFrame()
+    if id_col is not None:
+        id_series = working[id_col]
+        dup_id_mask = id_series.duplicated(keep=False) & id_series.notna()
+        conflict_mask = dup_id_mask & (~dup_mask)
+        conflicts_df = original_df[conflict_mask].copy()
+        if len(conflicts_df) > 0:
+            groups = {}
+            for idx in conflicts_df.index:
+                key = working.loc[idx, id_col]
+                groups.setdefault(key, []).append(idx)
+
+            id_to_group = {}
+            next_group_id = 1
+            reasons = []
+            for idx in conflicts_df.index:
+                key = working.loc[idx, id_col]
+                if key not in id_to_group:
+                    id_to_group[key] = next_group_id
+                    next_group_id += 1
+                group_idx = groups[key]
+                diff_cols = []
+                for col in working.columns:
+                    if col == id_col:
+                        continue
+                    vals = working.loc[group_idx, col].fillna("__NULL__")
+                    if vals.nunique() > 1:
+                        diff_cols.append(str(col))
+                reasons.append(f"Same {id_col} as another row, but differs in: " + ", ".join(diff_cols))
+
+            conflicts_df.insert(0, "reason", reasons)
 
     for col in working.columns:
         series, fill_changed = fill_missing(working[col])
@@ -210,6 +258,7 @@ def clean_dataframe(df):
     report["empty_rows_removed"] = int(is_empty_row.sum())
     report["rows_with_missing_values"] = int(len(missing_df))
     report["duplicate_rows_removed"] = before - len(cleaned)
+    report["conflicting_duplicate_rows"] = int(len(conflicts_df))
     report["final_row_count"] = len(cleaned)
 
-    return cleaned, report, duplicates_df, missing_df, empty_rows_df
+    return cleaned, report, duplicates_df, missing_df, empty_rows_df, conflicts_df
