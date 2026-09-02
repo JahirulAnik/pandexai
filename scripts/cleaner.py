@@ -3,8 +3,6 @@ import pandas as pd
 import numpy as np
 
 def standardize_casing(series):
-    """For text columns, pick the most frequent casing variant for each
-    lowercase value and replace all variants with it."""
     non_null = series.dropna().astype(str)
     if len(non_null) == 0:
         return series, 0
@@ -31,11 +29,9 @@ def standardize_casing(series):
     cleaned = series.apply(lambda v: replacements.get(v, v) if isinstance(v, str) else v)
     return cleaned, changed_count
 
-
 BLANK_LIKE_VALUES = {"", "n/a", "na", "null", "none", "-", "nan", "unknown"}
 
 def normalize_blank_like(series):
-    """Convert blank-like text values (empty string, 'N/A', '-', etc.) to real NaN."""
     def convert(v):
         if isinstance(v, str) and v.strip().lower() in BLANK_LIKE_VALUES:
             return np.nan
@@ -44,9 +40,7 @@ def normalize_blank_like(series):
     changed_count = int((converted.isna() & ~series.isna()).sum())
     return converted, changed_count
 
-
 def trim_whitespace(series):
-    """Strip leading/trailing whitespace from string values."""
     def trim(v):
         if isinstance(v, str):
             return v.strip()
@@ -58,11 +52,6 @@ def trim_whitespace(series):
             changed_count += 1
     return trimmed, changed_count
 
-
-# Known category groups: a column standardizes against a group only if EVERY
-# non-null value (lowercased, stripped) falls inside that group's keys.
-# This avoids misfiring on unrelated data - it only triggers when the whole
-# column is clearly one of these concepts.
 KNOWN_CATEGORY_GROUPS = [
     {"m": "Male", "male": "Male", "f": "Female", "female": "Female"},
     {"y": "Yes", "yes": "Yes", "n": "No", "no": "No"},
@@ -70,9 +59,6 @@ KNOWN_CATEGORY_GROUPS = [
 ]
 
 def standardize_known_categories(series):
-    """Maps common abbreviations/variants (M/Male, Y/Yes, T/True, etc.) to a
-    single canonical spelled-out form, but only when the ENTIRE column
-    matches one known group."""
     non_null = series.dropna().astype(str)
     if len(non_null) == 0:
         return series, 0
@@ -97,16 +83,12 @@ def standardize_known_categories(series):
 
     return series, 0
 
-
 DATE_LIKE_PATTERN = re.compile(
     r"\d{1,4}[-/]\d{1,2}[-/]\d{1,4}|\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b",
     re.IGNORECASE
 )
 
 def standardize_dates(series, column_name):
-    """If a column's values mostly look like dates and parse successfully,
-    reformats them all to a consistent YYYY-MM-DD form. Skipped entirely for
-    identifier-like columns (name contains 'id') to avoid false positives."""
     if "id" in column_name.lower():
         return series, 0
 
@@ -135,9 +117,7 @@ def standardize_dates(series, column_name):
     changed_count = int((converted.astype(str) != series.astype(str)).sum())
     return converted, changed_count
 
-
 def fill_missing(series):
-    """Fill missing values: median for numeric columns, 'Unknown' for text columns."""
     null_count = int(series.isnull().sum())
     if null_count == 0:
         return series, 0
@@ -150,18 +130,17 @@ def fill_missing(series):
         filled = series.fillna("Unknown")
         return filled, null_count
 
-
 def clean_dataframe(df):
-    """Applies the full cleaning pipeline to a dataframe.
-    Returns (cleaned_df, report dict)."""
     report = {
         "original_row_count": len(df),
-        "duplicate_rows_removed": 0,
         "columns_cleaned": {}
     }
 
-    for col in df.columns:
-        series = df[col]
+    original_df = df.copy()
+    working = df.copy()
+
+    for col in working.columns:
+        series = working[col]
         col_report = {}
 
         if not pd.api.types.is_numeric_dtype(series):
@@ -185,19 +164,52 @@ def clean_dataframe(df):
             if casing_changed:
                 col_report["casing_standardized"] = casing_changed
 
-        series, fill_changed = fill_missing(series)
-        if fill_changed:
-            col_report["missing_values_filled"] = fill_changed
-
-        df[col] = series
-
+        working[col] = series
         if col_report:
             report["columns_cleaned"][str(col)] = col_report
 
-    before = len(df)
-    df = df.drop_duplicates(keep="first").reset_index(drop=True)
-    report["duplicate_rows_removed"] = before - len(df)
+    is_empty_row = working.isna().all(axis=1)
+    empty_rows_df = original_df[is_empty_row].copy()
+    working = working[~is_empty_row].copy()
+    original_df = original_df[~is_empty_row].copy()
 
-    report["final_row_count"] = len(df)
-    return df, report
+    has_missing = working.isna().any(axis=1)
+    missing_df = original_df[has_missing].copy()
+    if len(missing_df) > 0:
+        missing_columns_list = []
+        for idx in missing_df.index:
+            cols_missing = [str(c) for c in working.columns if pd.isna(working.loc[idx, c])]
+            missing_columns_list.append(", ".join(cols_missing))
+        missing_df.insert(0, "missing_columns", missing_columns_list)
 
+    dedup_key = working.fillna("__PANDEX_NULL__")
+    dup_mask = dedup_key.duplicated(keep=False)
+    duplicates_df = original_df[dup_mask].copy()
+    if len(duplicates_df) > 0:
+        group_tuples = dedup_key[dup_mask].apply(lambda row: tuple(row), axis=1)
+        unique_keys = {}
+        group_ids = []
+        next_id = 1
+        for key in group_tuples:
+            if key not in unique_keys:
+                unique_keys[key] = next_id
+                next_id += 1
+            group_ids.append(unique_keys[key])
+        duplicates_df.insert(0, "duplicate_group", group_ids)
+
+    for col in working.columns:
+        series, fill_changed = fill_missing(working[col])
+        working[col] = series
+        if fill_changed:
+            col_report = report["columns_cleaned"].setdefault(str(col), {})
+            col_report["missing_values_filled"] = fill_changed
+
+    before = len(working)
+    cleaned = working.drop_duplicates(keep="first").reset_index(drop=True)
+
+    report["empty_rows_removed"] = int(is_empty_row.sum())
+    report["rows_with_missing_values"] = int(len(missing_df))
+    report["duplicate_rows_removed"] = before - len(cleaned)
+    report["final_row_count"] = len(cleaned)
+
+    return cleaned, report, duplicates_df, missing_df, empty_rows_df

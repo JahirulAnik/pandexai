@@ -5,13 +5,13 @@ import pandas as pd
 from loaders import load_dataframe
 from cleaner import clean_dataframe
 
-def build_output_path(path):
-    base, ext = os.path.splitext(path)
-    return f"{base}_cleaned{ext}"
+def build_output_folder(path):
+    base, _ext = os.path.splitext(path)
+    folder = f"{base}_cleaned_results"
+    os.makedirs(folder, exist_ok=True)
+    return folder
 
 def add_excel_autofilter(path, row_count, column_count):
-    """Adds Excel's AutoFilter dropdowns to the header row, so the user can
-    sort ascending/descending or filter to specific values directly in Excel."""
     from openpyxl import load_workbook
     from openpyxl.utils import get_column_letter
 
@@ -45,13 +45,32 @@ def clean_file(path):
             "warning": "This file has columns but zero data rows - nothing to clean."
         }
 
-    cleaned_df, report = clean_dataframe(df)
+    _base, ext = os.path.splitext(path)
+    cleaned_df, report, duplicates_df, missing_df, empty_rows_df = clean_dataframe(df)
 
-    output_path = build_output_path(path)
-    save_dataframe(cleaned_df, output_path)
+    output_folder = build_output_folder(path)
 
+    cleaned_path = os.path.join(output_folder, f"cleaned{ext}")
+    save_dataframe(cleaned_df, cleaned_path)
     report["file"] = path
-    report["output_file"] = output_path
+    report["output_folder"] = output_folder
+    report["cleaned_file"] = cleaned_path
+
+    if len(duplicates_df) > 0:
+        duplicates_path = os.path.join(output_folder, f"duplicates{ext}")
+        save_dataframe(duplicates_df, duplicates_path)
+        report["duplicates_file"] = duplicates_path
+
+    if len(missing_df) > 0:
+        missing_path = os.path.join(output_folder, f"missing_values{ext}")
+        save_dataframe(missing_df, missing_path)
+        report["missing_values_file"] = missing_path
+
+    if len(empty_rows_df) > 0:
+        empty_path = os.path.join(output_folder, f"empty_rows{ext}")
+        save_dataframe(empty_rows_df, empty_path)
+        report["empty_rows_file"] = empty_path
+
     if duplicate_column_names:
         report["duplicate_column_names_found"] = duplicate_column_names
     if encoding_note:
@@ -59,9 +78,7 @@ def clean_file(path):
 
     return report
 
-
 def friendly_error_message(e, path):
-    """Translates common exceptions into plain-English messages."""
     if isinstance(e, FileNotFoundError):
         return f"Couldn't find a file at '{path}'. Check the file name and make sure it's in this folder."
 
@@ -88,7 +105,6 @@ def friendly_error_message(e, path):
         return f"'{path}' doesn't look like valid JSON. Check the file's formatting."
 
     return message
-
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
