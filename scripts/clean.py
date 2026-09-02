@@ -46,7 +46,7 @@ def clean_file(path):
         }
 
     _base, ext = os.path.splitext(path)
-    cleaned_df, report, duplicates_df, missing_df, empty_rows_df = clean_dataframe(df)
+    cleaned_df, report, duplicates_df, missing_df, empty_rows_df, conflicts_df = clean_dataframe(df)
 
     output_folder = build_output_folder(path)
 
@@ -60,6 +60,11 @@ def clean_file(path):
         duplicates_path = os.path.join(output_folder, f"duplicates{ext}")
         save_dataframe(duplicates_df, duplicates_path)
         report["duplicates_file"] = duplicates_path
+
+    if len(conflicts_df) > 0:
+        conflicts_path = os.path.join(output_folder, f"conflicts{ext}")
+        save_dataframe(conflicts_df, conflicts_path)
+        report["conflicts_file"] = conflicts_path
 
     if len(missing_df) > 0:
         missing_path = os.path.join(output_folder, f"missing_values{ext}")
