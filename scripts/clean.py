@@ -57,12 +57,11 @@ def clean_file(path):
 
     output_folder = build_output_folder(path)
 
-    # The main cleaned file keeps the original format (so it drops into the
-    # same pipeline the user already has). The review files (duplicates,
-    # conflicts, missing values, empty rows) are always saved as .xlsx with
-    # AutoFilter and auto-sized columns, since they're meant for a human to
-    # open and review in Excel - this avoids the raw-CSV display mess.
-    cleaned_path = os.path.join(output_folder, f"cleaned{ext}")
+    # The cleaned file, and all review files, are always saved as .xlsx with
+    # AutoFilter dropdowns on every column and auto-sized widths - so the
+    # user can filter/sort by region, date, gender, status, etc. directly in
+    # Excel, regardless of what format the original input file was.
+    cleaned_path = os.path.join(output_folder, "cleaned.xlsx")
     save_dataframe(cleaned_df, cleaned_path)
     report["file"] = path
     report["output_folder"] = output_folder
