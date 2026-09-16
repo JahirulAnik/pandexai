@@ -1,6 +1,6 @@
 # PandexAI
 
-PandexAI is an AI-native data profiling CLI. It runs inside AI coding CLIs
+PandexAI is an AI-native data cleaning CLI. It runs inside AI coding CLIs
 (Claude Code, Cursor, etc.) to handle deterministic data work as real code,
 and hands the AI clean, structured output to reason over.
 
@@ -16,7 +16,23 @@ and hands the AI clean, structured output to reason over.
 This split exists so PandexAI's numbers are always trustworthy: they come
 from real computation, not a language model's guess.
 
+## Running scripts
+
+Always use the project's own interpreter, never the system Python:
+
+- Mac/Linux: `.pandex/venv/bin/python scripts/<script>.py ...`
+- Windows: `.pandex\venv\Scripts\python.exe scripts\<script>.py ...`
+
+Every script prints exactly one JSON object. Exit code 0 means success;
+exit code 1 means the JSON contains an "error" field with a plain-English
+message to relay to the user.
+
 ## Available commands
 
-- scan - profiles a CSV file (columns, types, null %, unique counts, basic
-  stats). See commands/scan.md for exact instructions.
+- clean - diagnoses and cleans a CSV, Excel or JSON file, writing
+  cleaned.xlsx and review files into <name>_cleaned_results/. See
+  commands/clean.md.
+- gather - combines two or more files into one workbook, joining on a
+  column with real value overlap or keeping them as linked sheets. See
+  commands/gather.md.
+- analyze - planned, not built yet.

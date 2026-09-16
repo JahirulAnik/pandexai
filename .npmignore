@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+tests/
+test_fixtures/
+pandex-sandbox/
+.github/
+*_cleaned_results/
+*_gathered_results/

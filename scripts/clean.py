@@ -1,9 +1,11 @@
-import sys
-import os
 import json
+import os
+import sys
+
 import pandas as pd
-from loaders import load_dataframe
 from cleaner import clean_dataframe
+from loaders import load_dataframe
+
 
 def build_output_folder(path):
     base, _ext = os.path.splitext(path)

@@ -1,14 +1,15 @@
-import sys
 import json
+import sys
+
 import pandas as pd
-from loaders import load_dataframe
 from checks import (
+    check_inconsistent_casing,
+    count_blank_like,
     duplicate_row_summary,
     duplicate_value_summary,
-    count_blank_like,
-    check_inconsistent_casing,
     safe_float,
 )
+from loaders import load_dataframe
 
 
 def profile_file(path):

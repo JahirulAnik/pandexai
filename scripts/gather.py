@@ -1,9 +1,10 @@
-import sys
-import os
 import json
-import pandas as pd
-from loaders import load_dataframe
+import os
+import sys
+
 from gatherer import gather_dataframes
+from loaders import load_dataframe
+
 
 def build_output_folder(filenames):
     first_base = os.path.splitext(filenames[0])[0]
@@ -67,7 +68,7 @@ def friendly_error_message(e, paths):
     if isinstance(e, FileNotFoundError):
         return f"Couldn't find one of these files: {', '.join(paths)}. Check the file names and make sure they're all in this folder."
     if isinstance(e, PermissionError):
-        return f"Couldn't open one of these files - it might be open in another program (like Excel). Close it and try again."
+        return "Couldn't open one of these files - it might be open in another program (like Excel). Close it and try again."
     message = str(e)
     return message
 

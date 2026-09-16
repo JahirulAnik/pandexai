@@ -1,5 +1,3 @@
-import pandas as pd
-import numpy as np
 
 def normalize_col_name(name):
     return str(name).strip().lower()

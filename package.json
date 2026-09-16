@@ -21,6 +21,15 @@
     "SKILL.md",
     "commands",
     "scripts",
+    "!scripts/__pycache__",
     ".claude"
-  ]
+  ],
+  "scripts": {
+    "test": "node --test tests/node/init.test.js",
+    "test:py": "pytest -q",
+    "lint": "ruff check scripts tests"
+  },
+  "engines": {
+    "node": ">=18"
+  }
 }
