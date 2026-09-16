@@ -1,6 +1,5 @@
 import pandas as pd
-
-BLANK_LIKE_VALUES = {"", "n/a", "na", "null", "none", "-", "nan", "unknown"}
+from cleaner import BLANK_LIKE_VALUES, is_id_column
 
 
 def duplicate_row_summary(df):
@@ -17,7 +16,7 @@ def duplicate_value_summary(series, column_name, uniqueness_threshold=0.9, max_e
     if len(non_null) == 0:
         return None
     uniqueness_ratio = non_null.nunique() / len(non_null)
-    looks_like_id = "id" in column_name.lower()
+    looks_like_id = is_id_column(column_name)
     if not looks_like_id and uniqueness_ratio < uniqueness_threshold:
         return None
     value_counts = non_null.value_counts()

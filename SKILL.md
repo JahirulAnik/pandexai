@@ -25,7 +25,10 @@ Always use the project's own interpreter, never the system Python:
 
 Every script prints exactly one JSON object. Exit code 0 means success;
 exit code 1 means the JSON contains an "error" field with a plain-English
-message to relay to the user.
+message to relay to the user. A successful report may also carry notes
+about the input that the user must hear: "encoding_note" (file was not
+UTF-8) and "malformed_rows_skipped" with "malformed_row_numbers" (CSV lines
+with the wrong number of fields were left out). Always relay those.
 
 ## Available commands
 

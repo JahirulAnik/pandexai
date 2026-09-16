@@ -26,7 +26,11 @@ named "<first-file-name>_gathered_results", containing "gathered.xlsx"
      join, and how strong the match was (present only when mode is "joined")
    - row_counts_per_file: how many rows each input file had
    - final_row_count: rows in the combined result (present when joined)
-   - gathered_file: path to the output file
+   - gathered_file: path to the output file (in a folder next to the first input file)
+   - file_notes: present only if a file needed special handling. Per file it
+     may contain encoding_note, or malformed_rows_skipped with
+     malformed_row_numbers (lines with the wrong number of fields that were
+     left out). Tell the user about these; they affect the combined result.
 3. Do NOT recompute, estimate, or guess any of these numbers yourself.
    Present a clear summary: which files were combined, how (joined on
    which column, or kept as separate sheets and why), and where the result

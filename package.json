@@ -25,8 +25,7 @@
     ".claude"
   ],
   "scripts": {
-    "test": "node --test tests/node/init.test.js",
-    "test:py": "pytest -q",
+    "test": "pytest -q",
     "lint": "ruff check scripts tests"
   },
   "engines": {

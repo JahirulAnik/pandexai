@@ -41,7 +41,10 @@ def standardize_casing(series):
     cleaned = series.apply(lambda v: replacements.get(v, v) if isinstance(v, str) else v)
     return cleaned, changed_count
 
-BLANK_LIKE_VALUES = {"", "n/a", "na", "null", "none", "-", "nan", "unknown"}
+# Markers that real-world exports use for "no value": pandas' own defaults plus
+# "?" (UCI datasets), "\N" (MySQL/OpenFlights dumps), "NULL" (SQL exports), "--".
+BLANK_LIKE_VALUES = {"", "n/a", "n.a.", "#n/a", "na", "null", "none", "nil", "-", "--", "?", "\\n",
+                     "nan", "unknown", "missing"}
 
 def normalize_blank_like(series):
     def convert(v):
@@ -97,7 +100,7 @@ DATE_LIKE_PATTERN = re.compile(
 )
 
 def standardize_dates(series, column_name):
-    if "id" in column_name.lower():
+    if is_id_column(column_name):
         return series, 0
 
     non_null = series.dropna().astype(str)
@@ -124,6 +127,28 @@ def standardize_dates(series, column_name):
     converted = series.apply(convert)
     return converted, _count_changes(series, converted)
 
+LEADING_ZERO_PATTERN = re.compile(r"^-?0\d")
+
+
+def coerce_numeric(series):
+    """A column that pandas read as text only because of markers like "?" (now
+    null) becomes numeric again, so it is filled with a median, not "Unknown".
+    Codes with leading zeros (postal codes, "007") are left as text."""
+    if pd.api.types.is_numeric_dtype(series):
+        return series, 0
+    non_null = series.dropna()
+    if len(non_null) == 0 or not all(isinstance(v, str) for v in non_null):
+        return series, 0
+    stripped = non_null.str.strip()
+    if stripped.str.contains(LEADING_ZERO_PATTERN).any():
+        return series, 0
+    numeric = pd.to_numeric(stripped, errors="coerce")
+    if numeric.isna().any():
+        return series, 0
+    converted = pd.to_numeric(series.where(series.isna(), series.astype(str).str.strip()), errors="coerce")
+    return converted, int(len(non_null))
+
+
 def fill_missing(series):
     null_count = int(series.isnull().sum())
     if null_count == 0:
@@ -137,9 +162,21 @@ def fill_missing(series):
         filled = series.fillna("Unknown")
         return filled, null_count
 
+CAMEL_ID_PATTERN = re.compile(r"[a-z](Id|ID)$")
+
+
+def is_id_column(name):
+    """True for names like id, order_id, "Order ID", customerID, PassengerId.
+    A plain substring test ("id" in name) wrongly matched width, valid, paid,
+    holiday, residence... which made real datasets report bogus conflicts."""
+    name = str(name).strip()
+    tokens = re.split(r"[\s_\-.]+", name.lower())
+    return "id" in tokens or bool(CAMEL_ID_PATTERN.search(name))
+
+
 def find_id_column(columns):
     for col in columns:
-        if "id" in str(col).lower():
+        if is_id_column(col):
             return col
     return None
 
@@ -177,6 +214,11 @@ def clean_dataframe(df):
             series, casing_changed = standardize_casing(series)
             if casing_changed:
                 col_report["casing_standardized"] = casing_changed
+
+            if not is_id_column(col):
+                series, numeric_changed = coerce_numeric(series)
+                if numeric_changed:
+                    col_report["converted_to_numeric"] = numeric_changed
 
         working[col] = series
         if col_report:

@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 tests/
 test_fixtures/
+real_data/
 pandex-sandbox/
 .github/
 *_cleaned_results/

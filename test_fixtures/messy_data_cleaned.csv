@@ -1,7 +1,0 @@
-customer_id,region,amount,signup_date,gender
-1,North,100.5,2024-01-05,Male
-2,south,200.0,2024-01-06,Male
-3,North,150.75,Unknown,Female
-2,south,200.0,Unknown,Female
-4,North,99.99,2024-01-08,Male
-5,East,150.75,Unknown,Female
