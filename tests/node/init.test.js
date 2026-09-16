@@ -8,7 +8,10 @@ const os = require("node:os");
 const path = require("node:path");
 
 const repoRoot = path.resolve(__dirname, "..", "..");
+// On Windows, npm is a .cmd shim; Node >= 18.20 / 20.12 / 22 refuses to spawn .cmd files
+// without a shell (CVE-2024-27980 hardening), so run it through the shell there.
 const npm = process.platform === "win32" ? "npm.cmd" : "npm";
+const npmOpts = process.platform === "win32" ? { shell: true } : {};
 
 test("pandex with unknown command prints usage and exits 1", () => {
   const r = spawnSync(process.execPath, [path.join(repoRoot, "bin", "pandex.js"), "bogus"], { encoding: "utf8" });
@@ -18,9 +21,9 @@ test("pandex with unknown command prints usage and exits 1", () => {
 
 test("pandex init sets up venv and copies skill files", { timeout: 10 * 60 * 1000 }, () => {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), "pandex-init-"));
-  const tgzName = execFileSync(npm, ["pack", "--pack-destination", work], { cwd: repoRoot, encoding: "utf8" })
+  const tgzName = execFileSync(npm, ["pack", "--pack-destination", work], { cwd: repoRoot, encoding: "utf8", ...npmOpts })
     .trim()
-    .split("\n")
+    .split(/\r?\n/)
     .pop();
   const tgz = path.join(work, tgzName);
 
@@ -30,8 +33,8 @@ test("pandex init sets up venv and copies skill files", { timeout: 10 * 60 * 100
 
   const proj = path.join(work, "proj");
   fs.mkdirSync(proj);
-  execFileSync(npm, ["init", "-y"], { cwd: proj, stdio: "ignore" });
-  execFileSync(npm, ["install", "--no-audit", "--no-fund", tgz], { cwd: proj, stdio: "ignore" });
+  execFileSync(npm, ["init", "-y"], { cwd: proj, stdio: "ignore", ...npmOpts });
+  execFileSync(npm, ["install", "--no-audit", "--no-fund", tgz], { cwd: proj, stdio: "ignore", ...npmOpts });
 
   const r = spawnSync(process.execPath, [path.join(proj, "node_modules", "pandexai", "bin", "pandex.js"), "init"], {
     cwd: proj,
