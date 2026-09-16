@@ -7,6 +7,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = REPO_ROOT / "scripts"
 FIXTURES_DIR = REPO_ROOT / "test_fixtures"
+REAL_DATA_DIR = REPO_ROOT / "real_data"
 
 # The scripts use flat imports (`from loaders import ...`), so they must be importable
 # as top-level modules. pyproject.toml also sets pythonpath, this is a belt-and-braces
@@ -17,8 +18,8 @@ if str(SCRIPTS_DIR) not in sys.path:
 
 @pytest.fixture
 def fixtures(tmp_path):
-    """Copy of test_fixtures/ in a temp dir so scripts can write *_results folders
-    without polluting the repo."""
+    """Copy of test_fixtures/ (failure-path files only) in a temp dir so scripts
+    can write *_results folders without polluting the repo."""
     dest = tmp_path / "fixtures"
     shutil.copytree(FIXTURES_DIR, dest)
     return dest

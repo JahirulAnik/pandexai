@@ -13,7 +13,7 @@ from loaders import load_dataframe
 
 
 def profile_file(path):
-    df, duplicate_column_names, encoding_note = load_dataframe(path)
+    df, duplicate_column_names, notes = load_dataframe(path)
 
     if len(df) == 0:
         return {
@@ -33,8 +33,7 @@ def profile_file(path):
         "columns": {}
     }
 
-    if encoding_note:
-        result["encoding_note"] = encoding_note
+    result.update(notes)
 
     for col in df.columns:
         series = df[col]

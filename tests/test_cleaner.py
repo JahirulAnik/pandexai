@@ -3,7 +3,9 @@ import numpy as np
 import pandas as pd
 from cleaner import (
     clean_dataframe,
+    coerce_numeric,
     fill_missing,
+    is_id_column,
     normalize_blank_like,
     standardize_casing,
     standardize_dates,
@@ -104,3 +106,32 @@ def test_clean_dataframe_removes_exact_duplicates():
     assert report["duplicate_rows_removed"] == 1
     assert len(dups) == 2  # both members of the group are reported for review
     assert len(cleaned) == 1
+
+
+def test_is_id_column_matches_whole_words_only():
+    for name in ("id", "ID", "order_id", "Order ID", "customerID", "PassengerId", "airline_id", "id_number"):
+        assert is_id_column(name), name
+    # Regression: these contain "id" as a substring and used to be treated as IDs.
+    for name in ("width", "valid", "paid", "holiday", "residence", "symboling"):
+        assert not is_id_column(name), name
+
+
+def test_coerce_numeric_recovers_columns_broken_by_missing_markers():
+    s = pd.Series(["12", " 7.5", np.nan, "3"])
+    out, changed = coerce_numeric(s)
+    assert changed == 3
+    assert pd.api.types.is_numeric_dtype(out)
+    assert out.tolist()[:2] == [12.0, 7.5]
+
+    # Leading zeros mean codes (postal codes, "007"), not numbers: leave as text.
+    codes, changed = coerce_numeric(pd.Series(["05021", "12209", np.nan]))
+    assert changed == 0 and not pd.api.types.is_numeric_dtype(codes)
+    # Mixed text stays text.
+    mixed, changed = coerce_numeric(pd.Series(["12", "twelve"]))
+    assert changed == 0
+
+
+def test_normalize_blank_like_knows_real_world_markers():
+    s = pd.Series(["?", " ? ", "\\N", "NULL", "#N/A", "--", "ok"])
+    out, changed = normalize_blank_like(s)
+    assert changed == 6 and out.iloc[6] == "ok"

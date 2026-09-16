@@ -6,8 +6,10 @@ from gatherer import gather_dataframes
 from loaders import load_dataframe
 
 
-def build_output_folder(filenames):
-    first_base = os.path.splitext(filenames[0])[0]
+def build_output_folder(first_path):
+    """<first file>_gathered_results, next to the first input file (not in the
+    current working directory)."""
+    first_base = os.path.splitext(first_path)[0]
     folder = f"{first_base}_gathered_results"
     os.makedirs(folder, exist_ok=True)
     return folder
@@ -29,14 +31,19 @@ def add_excel_autofilter(worksheet, row_count, column_count):
 def gather_files(paths):
     dataframes = []
     filenames = []
+    file_notes = {}
     for path in paths:
-        df, _dup_cols, _encoding_note = load_dataframe(path)
+        df, _dup_cols, notes = load_dataframe(path)
         dataframes.append(df)
         filenames.append(os.path.basename(path))
+        if notes:
+            file_notes[os.path.basename(path)] = notes
 
     mode, result, report = gather_dataframes(dataframes, filenames)
+    if file_notes:
+        report["file_notes"] = file_notes
 
-    output_folder = build_output_folder(filenames)
+    output_folder = build_output_folder(paths[0])
     output_path = os.path.join(output_folder, "gathered.xlsx")
 
     from openpyxl import Workbook

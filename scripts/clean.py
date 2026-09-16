@@ -46,7 +46,7 @@ def save_dataframe(df, path):
         raise ValueError(f"Unsupported file type '{ext}' for saving.")
 
 def clean_file(path):
-    df, duplicate_column_names, encoding_note = load_dataframe(path)
+    df, duplicate_column_names, notes = load_dataframe(path)
 
     if len(df) == 0:
         return {
@@ -91,8 +91,7 @@ def clean_file(path):
 
     if duplicate_column_names:
         report["duplicate_column_names_found"] = duplicate_column_names
-    if encoding_note:
-        report["encoding_note"] = encoding_note
+    report.update(notes)
 
     return report
 
