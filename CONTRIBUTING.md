@@ -36,7 +36,6 @@ commands/*.md              per-command instructions for the AI (input, how to ru
 SKILL.md                   the top-level skill file the AI reads first
 tests/                     pytest suite (unit + black-box CLI) and a Node smoke test for the installer
 test_fixtures/             small CSV/XLSX inputs covering clean, messy, empty, corrupted, non-UTF-8 cases
-pandex-sandbox/            a local playground that installs the package from npm; not part of the package
 ```
 
 The scripts use flat imports (`from loaders import ...`) on purpose: they are copied
@@ -58,7 +57,7 @@ Run the scripts directly against the fixtures:
 
 ```bash
 python scripts/clean.py test_fixtures/messy_data.csv
-python scripts/gather.py pandex-sandbox/sandbox_sales.csv pandex-sandbox/sandbox_cost.csv
+python scripts/gather.py test_fixtures/clean_data.csv test_fixtures/messy_data.csv
 python scripts/profile.py test_fixtures/large_data.csv
 ```
 
