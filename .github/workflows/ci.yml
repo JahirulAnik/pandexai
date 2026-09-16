@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-clean-and-gather:
+    name: Test clean & gather scripts
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Python dependencies
+        run: pip install pandas openpyxl
+
+      - name: clean.py should succeed on valid files
+        run: |
+          for f in clean_data all_null_column large_data mixed_encoding one_column messy_data; do
+            echo "--- clean.py test_fixtures/$f.csv ---"
+            python scripts/clean.py "test_fixtures/$f.csv"
+          done
+
+      - name: clean.py should fail gracefully on bad files
+        run: |
+          echo "--- clean.py test_fixtures/empty_file.csv (expected to fail) ---"
+          if python scripts/clean.py "test_fixtures/empty_file.csv"; then
+            echo "ERROR: expected this file to fail gracefully, but it succeeded"
+            exit 1
+          fi
+          echo "--- clean.py test_fixtures/corrupted.xlsx (expected to fail) ---"
+          if python scripts/clean.py "test_fixtures/corrupted.xlsx"; then
+            echo "ERROR: expected this file to fail gracefully, but it succeeded"
+            exit 1
+          fi
+
+      - name: gather.py should combine two files
+        run: python scripts/gather.py test_fixtures/clean_data.csv test_fixtures/messy_data.csv
+
+  test-npx-init:
+    name: Test npx pandex init end-to-end
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run pandex init in a fresh scratch folder
+        run: |
+          mkdir /tmp/pandex-ci-sandbox
+          cd /tmp/pandex-ci-sandbox
+          node $GITHUB_WORKSPACE/bin/pandex.js init
+          test -f SKILL.md
+          test -d commands
+          test -d .pandex/venv
+
+      - name: Run clean through the installed venv, like a real user would
+        run: |
+          cd /tmp/pandex-ci-sandbox
+          cp $GITHUB_WORKSPACE/test_fixtures/messy_data.csv .
+          .pandex/venv/bin/python scripts/clean.py messy_data.csv
+          test -d messy_data_cleaned_results
+          test -f messy_data_cleaned_results/cleaned.xlsx
