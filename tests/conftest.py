@@ -21,10 +21,6 @@ def fixtures(tmp_path):
     without polluting the repo."""
     dest = tmp_path / "fixtures"
     shutil.copytree(FIXTURES_DIR, dest)
-    for name in ("test_all_cases_v2.csv",):
-        src = REPO_ROOT / name
-        if src.exists():
-            shutil.copy(src, dest / name)
     return dest
 
 
