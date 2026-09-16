@@ -1,0 +1,3 @@
+reason,customer_id,name,region,amount,signup_date,gender
+"Same customer_id as another row, but differs in: signup_date, gender",2,jane doe,south,200.0,01/06/2024,Male
+"Same customer_id as another row, but differs in: signup_date, gender",2,Jane Doe,South,200.0,-,Female

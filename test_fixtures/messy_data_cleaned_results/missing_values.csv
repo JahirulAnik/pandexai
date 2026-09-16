@@ -1,0 +1,4 @@
+missing_columns,customer_id,region,amount,signup_date,gender
+signup_date,3,North,150.75,,f
+signup_date,2,South,200.0,-,Female
+"amount, signup_date",5,East,,,f

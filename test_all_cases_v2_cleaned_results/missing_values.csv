@@ -1,0 +1,4 @@
+reason,customer_id,name,region,amount,signup_date,gender
+Missing values in: signup_date,2,Jane Doe,South,200.0,-,Female
+Missing values in: signup_date,3,Bob Lee,North,150.75,,f
+"Missing values in: amount, signup_date",5,Mike Ross,East,,,f

@@ -1,0 +1,4 @@
+order_id,shipping_cost,carrier
+1,10.00,FedEx
+2,7.50,UPS
+3,12.00,DHL
