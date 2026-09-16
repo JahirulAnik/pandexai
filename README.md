@@ -4,82 +4,174 @@
 [![npm](https://img.shields.io/npm/v/pandexai)](https://www.npmjs.com/package/pandexai)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-AI-native data cleaning CLI. PandexAI runs inside AI coding CLIs (Claude Code, Cursor,
-etc.) and handles the deterministic parts of data work - deduplicating, normalising
-casing and dates, filling blanks, joining files - as real Python/pandas code, not AI
-guesses. The AI only handles judgment: reading the report, flagging what looks off,
-and explaining it to you.
+**Clean messy data files from inside your AI coding CLI, with numbers you can trust.**
 
-## Why
+PandexAI runs inside Claude Code, Cursor and similar tools. You type
+`/pandex clean sales.csv`; a real pandas script deduplicates, trims, normalises
+and fills the file, writes the results to Excel, and prints one JSON report. The
+AI never touches the numbers. It only reads the report and explains it to you.
 
-When working with an AI CLI on messy data, most of the groundwork doesn't need an LLM.
-It needs pandas doing pandas things, exactly and repeatably. PandexAI keeps that half
-deterministic and trustworthy, and lets the AI spend its effort on the half that
-actually needs reasoning.
+```
+/pandex clean sales.csv
+/pandex gather orders.csv customers.csv
+```
+
+- **Input:** any `.csv`, `.xlsx`, `.xls` or `.json` file. Originals are never modified.
+- **Output:** a `<name>_cleaned_results/` folder with `cleaned.xlsx` plus review files
+  for everything that was changed or could not be fixed automatically.
+- **Tested on real data:** UCI Adult, UCI Automobile, Titanic, OpenFlights and
+  Northwind are in the repository and checked on every commit. See the results below.
+
+## How it works
+
+```mermaid
+flowchart LR
+    U([You]) -- "/pandex clean sales.csv" --> AI[AI coding CLI<br/>Claude Code, Cursor, ...]
+    AI -- "reads SKILL.md +<br/>commands/clean.md" --> AI
+    AI -- "runs" --> PY[".pandex/venv/python<br/>scripts/clean.py"]
+    PY -- "writes" --> OUT[("sales_cleaned_results/<br/>cleaned.xlsx<br/>duplicates.xlsx<br/>conflicts.xlsx<br/>missing_values.xlsx<br/>empty_rows.xlsx")]
+    PY -- "prints one JSON report" --> AI
+    AI -- "plain-English summary,<br/>no recomputed numbers" --> U
+    style PY fill:#1f6feb,color:#fff,stroke:none
+    style AI fill:#8957e5,color:#fff,stroke:none
+```
+
+The project is built around one rule, written into `SKILL.md` so the AI reads it first:
+
+| | Who | Where |
+|---|---|---|
+| **Execution**: anything that computes a number (counts, medians, joins) | Python / pandas, deterministically | `scripts/` |
+| **Judgment**: interpreting the report, deciding what matters, explaining it | The AI | `SKILL.md`, `commands/*.md` |
+
+Every script prints a single JSON object and exits 0 on success, or exits 1 with
+`{"error": "plain English reason"}`. The markdown files tell the AI which fields to
+read and forbid it from estimating anything a script could compute.
 
 ## Install
 
-Inside your project:
+Inside the project where your data lives:
 
 ```bash
 npx pandexai init
 ```
 
 This creates an isolated Python environment at `.pandex/venv`, installs pandas and
-openpyxl into it, and copies the files the AI needs (`SKILL.md`, `commands/`,
-`scripts/`, `.claude/`) into your project. Python 3.10+ and Node 18+ are required.
+openpyxl into it, and copies `SKILL.md`, `commands/`, `scripts/` and `.claude/` into
+your project so the AI can find them. Requirements: Python 3.10+ and Node 18+.
 
-## Usage
+## `clean <file>`
 
-In your AI CLI session:
+Runs every column through the rules below, in order, then looks at the rows.
 
+```mermaid
+flowchart TD
+    A[Load file<br/>CSV / Excel / JSON] --> B{Text column?}
+    B -- no --> R
+    B -- yes --> C["Blank-like markers to null<br/>'', N/A, NULL, ?, \N, -, --, none, ..."]
+    C --> D[Trim whitespace]
+    D --> E["Dates to YYYY-MM-DD<br/>(only if 90%+ of values parse)"]
+    E --> F["Known categories<br/>m/male to Male, y/yes to Yes, t/true to True"]
+    F --> G["Casing: pick the most common spelling<br/>north / North / NORTH to North"]
+    G --> H["Numbers stored as text<br/>back to numbers"]
+    H --> R[Row checks]
+    R --> R1[Empty rows: every non-ID field blank]
+    R --> R2[Exact duplicate rows]
+    R --> R3["Conflicts: same ID,<br/>different data"]
+    R --> R4[Rows with any missing value]
+    R1 & R2 & R3 & R4 --> S["Fill remaining blanks<br/>numbers: median, text: 'Unknown'"]
+    S --> T[("cleaned.xlsx + review files")]
 ```
-/pandex clean sales.csv
-/pandex gather sales.xlsx shipping_costs.xlsx
+
+The results folder contains:
+
+| File | Created when | Contents |
+|---|---|---|
+| `cleaned.xlsx` | always | Final data. AutoFilter on every column, auto-sized widths |
+| `duplicates.xlsx` | exact duplicates found | Every copy, with a `reason` column |
+| `conflicts.xlsx` | rows share an ID but differ elsewhere | The rows, with a `reason` listing the differing fields |
+| `missing_values.xlsx` | some rows had blanks | The original rows before filling, with a `reason` listing the blank fields |
+| `empty_rows.xlsx` | rows were blank apart from the ID | The removed rows |
+
+Rules are deliberately conservative. A column is only treated as dates if at least
+90% of its values parse; categories are only mapped when every value in the column
+belongs to one known group; numbers with leading zeros (postal codes) stay text.
+When the tool is unsure, it leaves the data alone and lets the AI flag it.
+
+## `gather <file1> <file2> [...]`
+
+Combines files into one workbook. A column is used as the join key only if its
+**values** overlap across every file, not just its name. Two files that both have a
+`notes` column will not be joined on it.
+
+```mermaid
+flowchart LR
+    A[Load every file] --> B[Columns present in all files<br/>case-insensitive]
+    B --> C["Score each: share of values<br/>that also appear in the other files"]
+    C --> D{Best score >= 0.3?}
+    D -- yes --> E["Outer join on that column<br/>no rows dropped"]
+    D -- no --> F["One sheet per file<br/>in the same workbook"]
+    E & F --> G[("<first file>_gathered_results/gathered.xlsx")]
 ```
 
-Any CSV, Excel (`.xlsx`/`.xls`) or JSON file works. **Your original files are never
-modified.** Results are written to a folder next to the input.
+## Results on real data
 
-### `clean <file>`
+These datasets live in [`real_data/`](real_data/README.md) unmodified, and
+[`tests/test_real_data.py`](tests/test_real_data.py) checks every number below on each
+commit, recomputing the expected values from the raw files with plain pandas.
 
-Diagnoses and cleans one file. It removes exact duplicate rows, standardises casing
-("north" / "North"), turns blank-like text ("N/A", "-", "null") into real blanks, trims
-whitespace, normalises dates to `YYYY-MM-DD`, maps known categories (M/male -> Male,
-Y/yes -> Yes), and fills what's left (median for numbers, "Unknown" for text).
+| Dataset | What is wrong with it | What `clean` did | Verified |
+|---|---|---|---|
+| **Titanic** (891 rows) | 177 missing ages, 687 missing cabins, lowercase sexes | Ages filled with the median (28), cabins with "Unknown", `male`/`female` mapped to `Male`/`Female`, PassengerId confirmed unique | no nulls left, numeric columns byte-identical to the input |
+| **UCI Adult** (1500 rows) | every text cell has a leading space, `?` marks 244 missing cells, one exact duplicate row | 13,000+ cells trimmed, all 244 `?` cells found and filled, 1 duplicate removed and written to `duplicates.xlsx` | counts match an independent pandas scan of the raw file |
+| **UCI Automobile** (205 rows) | `?` in price, horsepower and four other numeric columns, which makes pandas read them as text | `?` removed, columns converted back to numbers, gaps filled with each column's median (price: 10,295) | every affected column is numeric in `cleaned.xlsx`; no `?` remains |
+| **OpenFlights airlines** (1500 rows) | MySQL `\N` for null in 1496 alias cells, `Y`/`N` flags | `\N` recognised as missing, flags mapped to `Yes`/`No` | no `\N` in the output, IDs unchanged |
+| **Northwind customers + orders** | 24 of 91 customer lines and 176 of 830 order lines have an unquoted comma inside a company name, so pandas refuses the files | Malformed lines skipped and their line numbers reported; `gather` then joined the two files on `customerID` with a 1.0 overlap score | 654 orders, one row each, every order matched to its customer |
 
-Creates `<file>_cleaned_results/` containing:
+Two bugs in the tool were found this way and are fixed and covered by tests: any
+column whose name merely *contained* "id" (like `width`) was treated as an ID column,
+producing 190 false conflicts on the Automobile data; and `?` / `\N` / `NULL` were not
+recognised as missing values at all.
 
-| File | When |
-|---|---|
-| `cleaned.xlsx` | Always. AutoFilter dropdowns on every column, auto-sized widths |
-| `duplicates.xlsx` | Exact duplicate rows were found, with a `reason` column |
-| `conflicts.xlsx` | Rows share an ID but differ elsewhere, with a `reason` column listing the differing fields |
-| `missing_values.xlsx` | Some rows had blanks, with a `reason` column listing which fields |
-| `empty_rows.xlsx` | Rows that were completely blank apart from the ID |
+## Project status
 
-### `gather <file1> <file2> [...]`
+**Works today**
 
-Combines two or more files. It looks for a column whose **values** genuinely overlap
-across all files (not just a shared name). If it finds one, it outer-joins on it so no
-rows are lost. If it doesn't, it keeps each file as its own sheet in one workbook
-rather than forcing a bad join. Creates `<file1>_gathered_results/gathered.xlsx`.
+- `clean` and `gather` as described above, on CSV, Excel and JSON.
+- Non-UTF-8 files fall back to latin-1 and say so in the report.
+- Malformed CSV lines are skipped and reported by line number instead of failing the file.
+- Every JSON field the AI is told to present is covered by a test.
 
-### `analyze`
+**Known limitations**
 
-Planned, not built yet.
+- `gather` needs the join column to have the *same name* in every file. `customer_id`
+  in one file and `customerID` in another will match; `cust_id` will not.
+- Filling text blanks with "Unknown" and numbers with the median is a fixed policy.
+  There is no per-column choice yet.
+- Malformed CSV lines are dropped, not repaired. The line numbers are in the report so
+  you can fix them by hand.
+- `analyze` is planned, not built. `profile.py` (a read-only per-column summary) exists
+  in `scripts/` but is not wired to a slash command.
 
-## How it works
-
-Each command is a small Python script that prints one JSON report. The markdown files
-in `commands/` tell the AI how to run the script and which fields to present, and
-forbid it from recomputing or estimating any number. See [CONTRIBUTING.md](CONTRIBUTING.md)
-for the full architecture.
+**Roadmap**: `analyze` (correlations and trends over a cleaned file), configurable fill
+strategies, fuzzy join-column matching for `gather`.
 
 ## Contributing
 
-Issues and PRs are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) first: it covers
-local setup, the test suite, CI, and the release process.
+Read [CONTRIBUTING.md](CONTRIBUTING.md). It covers the layout, how to run the tests,
+what CI checks, how to add a cleaning rule or a dataset, and how releases work. The
+short version:
+
+```bash
+git clone https://github.com/jahirulanik/pandexai && cd pandexai
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements-dev.txt
+pytest            # 35 tests, about 10 seconds
+ruff check scripts tests
+```
+
+Good first contributions: a public dataset that breaks a rule (add it to `real_data/`
+with a failing test), a new blank-like marker you have met in the wild, or a category
+group beyond gender / yes-no / true-false.
 
 ## License
 

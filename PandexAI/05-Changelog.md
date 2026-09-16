@@ -90,3 +90,19 @@ Several rounds of "the fix isn't showing up in the sandbox" turned out to NOT be
 - Lesson for future debugging: when "the sandbox isn't picking up a change we're sure we made," check in this order: (1) does the source file on disk actually have the change (`type <file> | findstr <marker>`), (2) is it committed (`git status`/`git diff`), (3) was it actually published (`npm publish` output, `npm view pandexai version` vs `package.json` version), (4) is the sandbox actually fetching fresh (`npm cache clean --force` + `npx --yes <pkg>@latest`).
 
 **Status: `clean` is now considered feature-complete for this round.** Verified end-to-end with a synthetic 100-row test file (`large_test.csv`) covering casing, gender variants, mixed date formats, blank placeholders, missing fields, fully empty rows, exact duplicates, and same-ID conflicts - all 5 output files produced correctly with working AutoFilter.
+
+## Unreleased (2026-09-17) - real-data validation, CI, tests
+
+Ran `clean` and `gather` against unmodified public datasets for the first time (Titanic, UCI Adult, UCI Automobile, OpenFlights airlines, Northwind customers/orders). All are committed under `real_data/` and asserted on by `tests/test_real_data.py`, with expectations recomputed from the raw files in the tests.
+
+Bugs this surfaced, all fixed:
+- ID-column detection used `"id" in name`, so `width` in the Automobile data was the "ID" and 190 rows were flagged as conflicts. Replaced with whole-word matching (`is_id_column`).
+- `?` (UCI), `\N` (MySQL dumps), `NULL`, `#N/A`, `--` were not blank-like, so hundreds of missing cells survived.
+- Numeric columns read as text because of `?` were filled with "Unknown"; now converted back to numeric and filled with the median (`converted_to_numeric` in the report).
+- Northwind CSVs have unquoted commas in company names; pandas refused them. Malformed lines are now skipped and reported by line number (`malformed_rows_skipped`, `malformed_row_numbers`; `file_notes` in `gather`).
+- `gather` wrote results into the working directory instead of next to the first input.
+
+Process changes:
+- GitHub Actions CI: ruff, pytest on Python 3.10-3.13 across Ubuntu/Windows/macOS (which covers pandas 2 and 3), package-consistency checks. Tag-driven npm release workflow.
+- The Node installer smoke test was removed by decision: tests use real data with real expected outcomes only. Synthetic fixtures were dropped except failure-path files (empty, corrupted, latin-1) and one hand-made conflict/empty-row case.
+- README rewritten with architecture / pipeline / gather diagrams (Mermaid) and a results-on-real-data table. CONTRIBUTING documents the real-data test rule and the two recurring mistakes (substring ID matching, NaN != NaN counting).

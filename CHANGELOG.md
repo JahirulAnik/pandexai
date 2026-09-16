@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Fixed
+- `clean`: columns whose name merely contained "id" (`width`, `valid`, `paid`, `holiday`)
+  were treated as the ID column. On the UCI Automobile data this produced 190 false
+  "conflicting duplicate" rows. Only whole-word ids count now (`id`, `order_id`,
+  `Order ID`, `customerID`, `PassengerId`).
+- `clean`: `?`, `\N`, `NULL`, `#N/A`, `--`, `nil`, `missing` are now recognised as
+  missing values. Previously 244 `?` cells in a UCI Adult sample and 1496 `\N` cells in
+  OpenFlights data survived untouched.
+- `clean`: numeric columns that pandas read as text because of a missing marker
+  (`price` with a `?`) were filled with the string "Unknown". They are converted back to
+  numbers and filled with the median; the report shows `converted_to_numeric`.
+- `gather`: results were written into the current working directory instead of next to
+  the first input file.
 - `clean`: `whitespace_trimmed`, `categories_standardized` and `dates_standardized`
   counts in the JSON report no longer include null cells (NaN != NaN was being counted
   as a change; more visible under pandas 3's `str` dtype).
@@ -13,11 +25,17 @@ All notable changes to this project are documented here. The format follows
 - npm tarball no longer includes `__pycache__` bytecode.
 
 ### Added
-- pytest suite (`tests/`) covering the pandas transforms, join detection, and the
-  scripts' JSON/exit-code contract against `test_fixtures/`.
-- Node smoke test that packs the package and runs `pandex init` in a fresh project.
-- GitHub Actions CI (lint, Python 3.10-3.13 on Linux/Windows/macOS, installer smoke on
-  Node 18/22, package consistency) and a tag-driven npm release workflow.
+- CSV files with a few malformed lines (unquoted commas, typical of SQL exports) are
+  read anyway; the lines are skipped and reported as `malformed_rows_skipped` and
+  `malformed_row_numbers`. `gather` reports the same per file under `file_notes`.
+- `real_data/`: unmodified public datasets (Titanic, UCI Adult, UCI Automobile,
+  OpenFlights airlines, Northwind customers and orders) with a README of sources.
+- pytest suite (`tests/`): real-data end-to-end tests whose expected values are
+  recomputed from the raw files, unit tests for every transform, and CLI contract tests.
+- GitHub Actions CI (lint, Python 3.10-3.13 on Linux/Windows/macOS, package
+  consistency) and a tag-driven npm release workflow.
+- README diagrams of the architecture, the `clean` pipeline and the `gather` decision,
+  plus a results table on the real datasets.
 - `CONTRIBUTING.md`, PR template, issue templates.
 - `pyproject.toml` now declares dependencies, ruff and pytest config; version aligned
   with `package.json`.

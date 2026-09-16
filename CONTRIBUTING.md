@@ -34,8 +34,9 @@ scripts/
 commands/*.md              per-command instructions for the AI (input, how to run, JSON fields, tone)
 .claude/commands/pandex.md the /pandex slash command router (clean | gather | analyze-stub)
 SKILL.md                   the top-level skill file the AI reads first
-tests/                     pytest suite (unit + black-box CLI) and a Node smoke test for the installer
-test_fixtures/             small CSV/XLSX inputs covering clean, messy, empty, corrupted, non-UTF-8 cases
+tests/                     pytest suite: unit tests, real-data end-to-end tests, CLI contract tests
+real_data/                 unmodified public datasets (Titanic, UCI, OpenFlights, Northwind); see its README
+test_fixtures/             failure-path inputs only: empty file, corrupted .xlsx, latin-1 file, one hand-made edge case
 ```
 
 The scripts use flat imports (`from loaders import ...`) on purpose: they are copied
@@ -56,9 +57,9 @@ pip install -r requirements-dev.txt
 Run the scripts directly against the fixtures:
 
 ```bash
-python scripts/clean.py test_fixtures/messy_data.csv
-python scripts/gather.py test_fixtures/clean_data.csv test_fixtures/messy_data.csv
-python scripts/profile.py test_fixtures/large_data.csv
+python scripts/clean.py real_data/uci_adult_sample.csv
+python scripts/gather.py real_data/northwind_customers.csv real_data/northwind_orders.csv
+python scripts/profile.py real_data/titanic.csv
 ```
 
 Output folders (`*_cleaned_results/`, `*_gathered_results/`) are written next to the
@@ -69,20 +70,27 @@ input file. Don't commit new ones.
 | What | Command | Notes |
 |---|---|---|
 | Lint | `ruff check scripts tests` | `ruff check --fix` auto-fixes import order |
-| Python tests | `pytest` | ~10 s. `tests/test_scripts_cli.py` runs the scripts as subprocesses, exactly like the AI does |
-| Installer smoke test | `npm test` | Packs the tarball, installs it into a temp project, runs `pandex init`, runs `clean.py` through the created venv. ~1-2 min, needs `python3` on PATH |
+| Tests | `pytest` (or `npm test`) | ~10 s. Real-data tests and CLI tests run the scripts as subprocesses, exactly like the AI does |
 
-CI runs all three on every push and PR (see below). Please run at least `ruff` and
-`pytest` before opening a PR.
+CI runs both on every push and PR (see below). Please run them before opening a PR.
 
 ## Writing tests
 
+The rule: test against real data, not data invented to pass. There is no smoke test.
+
+- **Real datasets** are the primary tests. `tests/test_real_data.py` runs `clean` and
+  `gather` on the files in `real_data/` and asserts on the report. Expected numbers must
+  be recomputed from the raw file inside the test with plain pandas, or be documented
+  properties of the dataset (Titanic has 891 rows and 177 missing ages). When you fix a
+  bug found on real data, add the dataset (or a contiguous slice of it) and a test that
+  fails without the fix. `real_data/README.md` explains how to add one.
 - **Pure transforms** (`cleaner.py`, `gatherer.py`, `checks.py`) get unit tests in
-  `tests/test_cleaner.py` / `tests/test_gatherer.py`. Build a tiny `pd.Series` or
-  `pd.DataFrame` inline; assert both the transformed values and the change count.
-- **Behaviour the AI relies on** (JSON field names, exit codes, output file names,
-  friendly error text) goes in `tests/test_scripts_cli.py`. Use the `fixtures` fixture,
-  which gives you a scratch copy of `test_fixtures/`.
+  `tests/test_cleaner.py` / `tests/test_gatherer.py`. Build a tiny `pd.Series` inline;
+  assert both the transformed values and the change count.
+- **The JSON contract** (field names, exit codes, output file names, friendly error
+  text) is in `tests/test_scripts_cli.py`. `test_fixtures/` holds only inputs that cannot
+  be downloaded: an empty file, a corrupted `.xlsx`, a latin-1 export, and one hand-made
+  CSV that has a same-ID conflict and a fully empty row in the same file.
 - Watch for **null handling**. pandas 3 uses a `str` dtype where `NaN != NaN` and
   `NA` comparisons are truthy. Counts must be computed with `_count_changes()` in
   `cleaner.py`, never with `(a != b).sum()` over a column that may contain nulls.
@@ -108,7 +116,7 @@ CI runs all three on every push and PR (see below). Please run at least `ruff` a
 2. `commands/<name>.md` - what it does, how to run it, which JSON fields to present,
    what to say to the user. Copy the structure of `commands/clean.md`.
 3. Add a branch to `.claude/commands/pandex.md` and a line to `SKILL.md`.
-4. Tests in both `tests/test_<name>er.py` and `tests/test_scripts_cli.py`.
+4. Unit tests in `tests/test_<name>er.py`, and a real-data test in `tests/test_real_data.py`.
 5. Nothing in `bin/pandex.js` needs to change: it copies whole directories.
 
 ### Adding a cleaning rule
@@ -116,7 +124,16 @@ CI runs all three on every push and PR (see below). Please run at least `ruff` a
 Add a function `rule(series) -> (new_series, changed_count)` in `cleaner.py`, wire it
 into the per-column loop in `clean_dataframe()`, add its count key to the
 `columns_cleaned` report, and document that key in `commands/clean.md`. Rules must be
-conservative: when unsure, leave the data alone and let the AI flag it.
+conservative: when unsure, leave the data alone and let the AI flag it. Find a public
+dataset that needs the rule and add it to `real_data/` with a test; a rule nothing real
+needs is a rule we do not add.
+
+Two mistakes we have already made, so you do not have to:
+
+- Substring checks on column names. `"id" in name` matched `width` and `paid`. Use
+  `is_id_column()`.
+- Counting changes with `(before != after).sum()`. NaN never equals NaN, so every null
+  cell counted as a change. Use `_count_changes()`.
 
 ## Style
 
@@ -135,9 +152,8 @@ conservative: when unsure, leave the data alone and let the AI flag it.
 | Job | What it checks |
 |---|---|
 | `lint` | `ruff check`; `ruff format --check` is advisory only for now |
-| `python-tests` | `pytest` on Python 3.10 and 3.13 across Ubuntu, Windows, macOS, plus 3.11/3.12 on Ubuntu |
-| `cli-smoke` | `npm test` on Node 18 and 22, Ubuntu and Windows (real `pandex init` in a temp project) |
-| `package-consistency` | `package.json` and `pyproject.toml` versions match; every `files` entry exists; tarball has no `__pycache__`, tests, or sandbox |
+| `python-tests` | `pytest` on Python 3.10 and 3.13 across Ubuntu, Windows, macOS, plus 3.11/3.12 on Ubuntu. Python 3.10 gets pandas 2.x, 3.11+ gets pandas 3.x, so both are covered |
+| `package-consistency` | `package.json` and `pyproject.toml` versions match; every `files` entry exists; tarball has no `__pycache__`, tests, real data, or sandbox |
 
 `.github/workflows/release.yml` runs when a `v*.*.*` tag is pushed: it verifies the tag
 equals the `package.json` version, re-runs the full CI workflow, publishes to npm with
