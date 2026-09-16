@@ -81,4 +81,4 @@ for (const item of filesToCopy) {
 }
 
 console.log("");
-console.log("PandexAI is ready. Try: /pandex scan <your-file.csv> inside your AI CLI.");
+console.log("PandexAI is ready. Try: /pandex clean <your-file.csv> or /pandex gather <a.csv> <b.csv> inside your AI CLI.");

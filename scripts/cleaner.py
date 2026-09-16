@@ -1,6 +1,18 @@
 import re
-import pandas as pd
+
 import numpy as np
+import pandas as pd
+
+
+def _count_changes(before, after):
+    """Number of cells whose value actually changed. Null cells are never counted:
+    comparing NaN to NaN (or pandas NA) reports "different", which used to inflate
+    the counts in the JSON report."""
+    changed = 0
+    for a, b in zip(before.tolist(), after.tolist()):
+        if isinstance(a, str) and a != b:
+            changed += 1
+    return changed
 
 def standardize_casing(series):
     non_null = series.dropna().astype(str)
@@ -46,11 +58,7 @@ def trim_whitespace(series):
             return v.strip()
         return v
     trimmed = series.apply(trim)
-    changed_count = 0
-    for a, b in zip(series.tolist(), trimmed.tolist()):
-        if a != b:
-            changed_count += 1
-    return trimmed, changed_count
+    return trimmed, _count_changes(series, trimmed)
 
 KNOWN_CATEGORY_GROUPS = [
     {"m": "Male", "male": "Male", "f": "Female", "female": "Female"},
@@ -76,7 +84,7 @@ def standardize_known_categories(series):
                         return group[key]
                 return v
             converted = series.apply(convert)
-            changed_count = int((converted.astype(str) != series.astype(str)).sum())
+            changed_count = _count_changes(series, converted)
             if changed_count:
                 return converted, changed_count
             return series, 0
@@ -114,8 +122,7 @@ def standardize_dates(series, column_name):
         return dt.strftime("%Y-%m-%d")
 
     converted = series.apply(convert)
-    changed_count = int((converted.astype(str) != series.astype(str)).sum())
-    return converted, changed_count
+    return converted, _count_changes(series, converted)
 
 def fill_missing(series):
     null_count = int(series.isnull().sum())

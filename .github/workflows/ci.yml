@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff
+      - run: ruff check scripts tests
+      - run: ruff format --check scripts tests || echo "::warning::ruff format reports differences (non-blocking for now)"
+
+  python-tests:
+    name: Python ${{ matrix.python }} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.10", "3.13"]
+        include:
+          # Full version sweep on Linux only; the OS axis is covered with the min/max versions above.
+          - { os: ubuntu-latest, python: "3.11" }
+          - { os: ubuntu-latest, python: "3.12" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - run: pytest
+
+  cli-smoke:
+    name: npx pandex init (Node ${{ matrix.node }} / ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node: ["18", "22"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: npm test
+
+  package-consistency:
+    name: Package consistency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: package.json and pyproject.toml versions must match
+        run: |
+          NPM_V=$(node -p "require('./package.json').version")
+          PY_V=$(python3 -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          echo "package.json=$NPM_V pyproject.toml=$PY_V"
+          test "$NPM_V" = "$PY_V"
+      - name: Every path in package.json "files" must exist
+        run: |
+          node -e '
+            const fs = require("fs");
+            const files = require("./package.json").files.filter(f => !f.startsWith("!"));
+            const missing = files.filter(f => !fs.existsSync(f));
+            if (missing.length) { console.error("Missing:", missing); process.exit(1); }
+          '
+      - name: Tarball must not contain bytecode or dev-only folders
+        run: |
+          npm pack --dry-run --json | node -e '
+            const pack = JSON.parse(require("fs").readFileSync(0, "utf8"))[0];
+            const bad = pack.files.map(f => f.path).filter(p => /__pycache__|\.pyc$|^tests\/|^test_fixtures\/|^pandex-sandbox\//.test(p));
+            if (bad.length) { console.error("Unexpected files in tarball:", bad); process.exit(1); }
+            console.log(`${pack.entryCount} files, ${pack.unpackedSize} bytes unpacked`);
+          '
