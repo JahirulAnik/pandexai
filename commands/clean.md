@@ -28,11 +28,21 @@ next to it, named "<name>_cleaned_results", containing:
 
 All files have AutoFilter dropdowns and auto-sized columns.
 
+If no filename is given, clean falls back to whatever "/pandex gather"
+most recently produced in this project (it remembers this automatically),
+so the two commands can be chained: gather first, then clean with no
+arguments to clean the combined result.
+
 ## How to run this command
 
 1. Run: python scripts/clean.py <path-to-file>
+   or, with no filename, to clean whatever gather last produced:
+   python scripts/clean.py
    (use the project's .pandex/venv Python interpreter, not the system one)
 2. The script prints a JSON report. Fields to look for:
+   - used_last_gathered_file: present only when no filename was given -
+     the file clean picked up automatically. Tell the user which file
+     this was.
    - output_folder: the results folder that was created
    - cleaned_file: path to the main cleaned .xlsx file
    - duplicates_file / conflicts_file / missing_values_file / empty_rows_file:

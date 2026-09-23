@@ -123,14 +123,63 @@ def friendly_error_message(e, path):
 
     return message
 
+def read_last_gathered_state(cwd):
+    """Best-effort read of the file gather last wrote to (see
+    write_last_gathered_state in gather.py). Returns None if there's no
+    record yet, or it can't be read for any reason."""
+    state_path = os.path.join(cwd, ".pandex", "state.json")
+    try:
+        with open(state_path, "r", encoding="utf-8") as f:
+            return json.load(f).get("last_gathered")
+    except (OSError, json.JSONDecodeError):
+        return None
+
+def resolve_input_path(argv, cwd):
+    """Given sys.argv[1:] and the current working directory, returns the
+    file clean should operate on, or raises ValueError with a message
+    meant to be shown to the user as-is.
+
+    - One filename given: use it.
+    - No filename given: fall back to whatever gather last combined, so
+      "/pandex clean" alone can pick up straight where "/pandex gather"
+      left off.
+    - Anything else (2+ filenames): clean only ever works on one file at a
+      time, so this is a usage error.
+    """
+    if len(argv) == 1:
+        return argv[0]
+
+    if len(argv) > 1:
+        raise ValueError("Usage: python clean.py <path-to-file>")
+
+    last_gathered = read_last_gathered_state(cwd)
+    if not last_gathered:
+        raise ValueError(
+            "No filename was given, and there's no record of a previous "
+            "gather to fall back on. Run 'python clean.py <path-to-file>', "
+            "or run gather first."
+        )
+
+    candidate = last_gathered if os.path.isabs(last_gathered) else os.path.join(cwd, last_gathered)
+    if not os.path.exists(candidate):
+        raise ValueError(
+            f"No filename was given, and the last gathered file "
+            f"('{last_gathered}') no longer exists. Run "
+            f"'python clean.py <path-to-file>' instead."
+        )
+    return candidate
+
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print(json.dumps({"error": "Usage: python clean.py <path-to-file>"}))
+    try:
+        file_path = resolve_input_path(sys.argv[1:], os.getcwd())
+    except ValueError as e:
+        print(json.dumps({"error": str(e)}))
         sys.exit(1)
 
-    file_path = sys.argv[1]
     try:
         result = clean_file(file_path)
+        if len(sys.argv) == 1:
+            result["used_last_gathered_file"] = file_path
         print(json.dumps(result, indent=2))
     except Exception as e:
         print(json.dumps({"error": friendly_error_message(e, file_path)}))

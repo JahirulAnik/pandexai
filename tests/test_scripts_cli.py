@@ -77,14 +77,72 @@ def test_clean_friendly_errors(python_exe, scripts_dir, fixtures, name, fragment
     assert fragment in r["error"]
 
 
-def test_clean_usage_error(python_exe, scripts_dir, fixtures):
-    code, r = run(python_exe, scripts_dir / "clean.py", cwd=fixtures)
+def test_clean_too_many_args_is_usage_error(python_exe, scripts_dir, fixtures):
+    code, r = run(python_exe, scripts_dir / "clean.py", "a.csv", "b.csv", cwd=fixtures)
     assert code == 1 and "Usage" in r["error"]
+
+
+def test_clean_no_filename_without_gathered_state_errors(python_exe, scripts_dir, fixtures):
+    code, r = run(python_exe, scripts_dir / "clean.py", cwd=fixtures)
+    assert code == 1
+    assert "No filename was given" in r["error"]
+    assert "gather" in r["error"]
+
+
+def test_clean_no_filename_uses_last_gathered_file(python_exe, scripts_dir, tmp_path):
+    # Northwind customers/orders share a real, high-cardinality customerID
+    # join key - a sane real-world gather, unlike joining a file with itself.
+    (tmp_path / "northwind_customers.csv").write_bytes((REAL_DATA_DIR / "northwind_customers.csv").read_bytes())
+    (tmp_path / "northwind_orders.csv").write_bytes((REAL_DATA_DIR / "northwind_orders.csv").read_bytes())
+
+    gather_code, gather_report = run(
+        python_exe, scripts_dir / "gather.py", "northwind_customers.csv", "northwind_orders.csv", cwd=tmp_path
+    )
+    assert gather_code == 0, gather_report
+    assert (tmp_path / ".pandex" / "state.json").exists()
+
+    clean_code, clean_report = run(python_exe, scripts_dir / "clean.py", cwd=tmp_path)
+    assert clean_code == 0, clean_report
+    # resolve_input_path returns an absolute path (it has to, to open the file
+    # regardless of cwd); the state file itself stores the relative path.
+    expected = str(tmp_path / gather_report["gathered_file"])
+    assert clean_report["used_last_gathered_file"] == expected
+    assert clean_report["file"] == expected
+
+
+def test_clean_no_filename_reports_missing_gathered_file(python_exe, scripts_dir, tmp_path):
+    pandex_dir = tmp_path / ".pandex"
+    pandex_dir.mkdir()
+    (pandex_dir / "state.json").write_text('{"last_gathered": "does_not_exist_gathered_results/gathered.xlsx"}')
+
+    code, r = run(python_exe, scripts_dir / "clean.py", cwd=tmp_path)
+    assert code == 1
+    assert "no longer exists" in r["error"]
 
 
 def test_gather_requires_two_files(python_exe, scripts_dir, fixtures):
     code, r = run(python_exe, scripts_dir / "gather.py", "mixed_encoding.csv", cwd=fixtures)
     assert code == 1 and "at least 2 files" in r["error"]
+
+
+def test_gather_no_filenames_autodiscovers_project_files(python_exe, scripts_dir, tmp_path):
+    (tmp_path / "northwind_customers.csv").write_bytes((REAL_DATA_DIR / "northwind_customers.csv").read_bytes())
+    (tmp_path / "northwind_orders.csv").write_bytes((REAL_DATA_DIR / "northwind_orders.csv").read_bytes())
+    # A hidden file and a non-data file should be ignored by discovery.
+    (tmp_path / ".hidden.csv").write_text("a,b\n1,2\n")
+    (tmp_path / "notes.txt").write_text("not a data file")
+
+    code, r = run(python_exe, scripts_dir / "gather.py", cwd=tmp_path)
+    assert code == 0, r
+    assert sorted(r["auto_discovered_files"]) == ["northwind_customers.csv", "northwind_orders.csv"]
+    assert r["mode"] == "joined"
+
+
+def test_gather_no_filenames_needs_at_least_two_discovered(python_exe, scripts_dir, tmp_path):
+    (tmp_path / "only_one.csv").write_text("a,b\n1,2\n")
+    code, r = run(python_exe, scripts_dir / "gather.py", cwd=tmp_path)
+    assert code == 1
+    assert "found 1" in r["error"]
 
 
 def test_profile_reports_real_column_statistics(python_exe, scripts_dir, tmp_path):
