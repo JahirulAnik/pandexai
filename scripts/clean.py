@@ -161,6 +161,7 @@ def resolve_input_path(argv, cwd):
         )
 
     candidate = last_gathered if os.path.isabs(last_gathered) else os.path.join(cwd, last_gathered)
+    candidate = os.path.normpath(candidate)
     if not os.path.exists(candidate):
         raise ValueError(
             f"No filename was given, and the last gathered file "
