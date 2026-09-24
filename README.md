@@ -14,6 +14,8 @@ AI never touches the numbers. It only reads the report and explains it to you.
 ```
 /pandex clean sales.csv
 /pandex gather orders.csv customers.csv
+/pandex profile sales.csv
+/pandex analyze orders.csv
 ```
 
 - **Input:** any `.csv`, `.xlsx`, `.xls` or `.json` file. Originals are never modified.
@@ -137,6 +139,11 @@ recognised as missing values at all.
 **Works today**
 
 - `clean` and `gather` as described above, on CSV, Excel and JSON.
+- `profile`: read-only per-column statistics for a single file (nulls, blank-like
+  values, casing issues, duplicate values) - nothing is written to disk.
+- `analyze`: everything `profile` reports, plus correlations between numeric columns,
+  trends over time (when a date column exists), group-by comparisons, and outlier
+  flagging (IQR fences) - also read-only.
 - Non-UTF-8 files fall back to latin-1 and say so in the report.
 - Malformed CSV lines are skipped and reported by line number instead of failing the file.
 - Every JSON field the AI is told to present is covered by a test.
@@ -145,15 +152,21 @@ recognised as missing values at all.
 
 - `gather` needs the join column to have the *same name* in every file. `customer_id`
   in one file and `customerID` in another will match; `cust_id` will not.
+- `gather`'s join-column picker doesn't yet guard against picking a low-cardinality
+  column (a status/category code) purely because its values overlap well - can produce
+  an unexpectedly huge joined result. Prefer files that share a real, high-cardinality
+  key (an order ID, a customer ID) until this is fixed.
 - Filling text blanks with "Unknown" and numbers with the median is a fixed policy.
   There is no per-column choice yet.
 - Malformed CSV lines are dropped, not repaired. The line numbers are in the report so
   you can fix them by hand.
-- `analyze` is planned, not built. `profile.py` (a read-only per-column summary) exists
-  in `scripts/` but is not wired to a slash command.
+- `analyze`'s trend/group/outlier analysis runs on the raw file - it doesn't know a
+  column like a shipping-method code is categorical rather than a real quantity, so a
+  correlation or trend involving it should be read with judgment, not taken at face value.
 
-**Roadmap**: `analyze` (correlations and trends over a cleaned file), configurable fill
-strategies, fuzzy join-column matching for `gather`.
+**Roadmap**: `validate` (business-rule / data-quality checks), `compare` (diff two
+files or periods), `anomalies` (broken relationships between gathered files),
+configurable fill strategies, fuzzy join-column matching for `gather`.
 
 ## Contributing
 
@@ -165,7 +178,7 @@ short version:
 git clone https://github.com/jahirulanik/pandexai && cd pandexai
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
-pytest            # 35 tests, about 10 seconds
+pytest            # 76 tests, well under a minute
 ruff check scripts tests
 ```
 

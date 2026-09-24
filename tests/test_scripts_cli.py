@@ -156,3 +156,104 @@ def test_profile_reports_real_column_statistics(python_exe, scripts_dir, tmp_pat
     assert r["columns"]["Age"]["median"] == raw["Age"].median()
     assert r["columns"]["Fare"]["max"] == raw["Fare"].max()
     assert r["columns"]["Sex"]["unique_count"] == 2
+
+
+def test_analyze_includes_every_profile_field_plus_its_own(python_exe, scripts_dir, tmp_path):
+    src = REAL_DATA_DIR / "titanic.csv"
+    (tmp_path / "titanic.csv").write_bytes(src.read_bytes())
+    profile_code, profile_report = run(python_exe, scripts_dir / "profile.py", "titanic.csv", cwd=tmp_path)
+    analyze_code, analyze_report = run(python_exe, scripts_dir / "analyze.py", "titanic.csv", cwd=tmp_path)
+    assert profile_code == 0 and analyze_code == 0
+    for key in profile_report:
+        assert analyze_report[key] == profile_report[key]
+    for key in ("correlations", "trends", "group_comparisons", "outliers"):
+        assert key in analyze_report
+    # Original file is untouched - analyze is read-only, no results folder.
+    assert (tmp_path / "titanic.csv").read_bytes() == src.read_bytes()
+    assert not (tmp_path / "titanic_analyzed_results").exists()
+
+
+def test_analyze_correlations_on_real_data(python_exe, scripts_dir, tmp_path):
+    src = REAL_DATA_DIR / "uci_automobile.csv"
+    (tmp_path / "uci_automobile.csv").write_bytes(src.read_bytes())
+    code, r = run(python_exe, scripts_dir / "analyze.py", "uci_automobile.csv", cwd=tmp_path)
+    assert code == 0, r
+    top = r["correlations"][0]
+    # city_mpg and highway_mpg are, correctly, almost perfectly correlated in this dataset.
+    assert {top["column_a"], top["column_b"]} == {"city_mpg", "highway_mpg"}
+    assert top["correlation"] > 0.9
+    assert top["strength"] == "strong positive"
+    # Sorted strongest-first, and capped rather than dumping every pair on a
+    # dataset with this many numeric columns.
+    magnitudes = [abs(pair["correlation"]) for pair in r["correlations"]]
+    assert magnitudes == sorted(magnitudes, reverse=True)
+    assert len(r["correlations"]) <= 15
+
+
+def test_analyze_trends_on_real_dated_data(python_exe, scripts_dir, tmp_path):
+    src = REAL_DATA_DIR / "northwind_orders.csv"
+    (tmp_path / "northwind_orders.csv").write_bytes(src.read_bytes())
+    code, r = run(python_exe, scripts_dir / "analyze.py", "northwind_orders.csv", cwd=tmp_path)
+    assert code == 0, r
+    assert r["trends"] is not None
+    assert r["trends"]["date_column"] == "orderDate"
+    assert r["trends"]["period"] in ("month", "year")
+    assert "freight" in r["trends"]["columns"]
+    assert r["trends"]["columns"]["freight"]["direction"] in ("increasing", "decreasing", "flat")
+    # freight has real outliers in this dataset (large one-off shipments).
+    assert "freight" in r["outliers"]
+    assert r["outliers"]["freight"]["outlier_count"] > 0
+    # shipRegion/shipCountry are real categorical columns worth comparing by.
+    group_by_columns = {c["group_by"] for c in r["group_comparisons"]}
+    assert "shipCountry" in group_by_columns
+
+
+def test_analyze_trends_is_null_without_a_date_column(python_exe, scripts_dir, tmp_path):
+    src = REAL_DATA_DIR / "titanic.csv"
+    (tmp_path / "titanic.csv").write_bytes(src.read_bytes())
+    code, r = run(python_exe, scripts_dir / "analyze.py", "titanic.csv", cwd=tmp_path)
+    assert code == 0, r
+    assert r["trends"] is None
+
+
+def test_analyze_too_many_args_is_usage_error(python_exe, scripts_dir, fixtures):
+    code, r = run(python_exe, scripts_dir / "analyze.py", "a.csv", "b.csv", cwd=fixtures)
+    assert code == 1
+    assert "Usage: python analyze.py" in r["error"]
+
+
+def test_analyze_no_filename_without_gathered_state_errors(python_exe, scripts_dir, fixtures):
+    code, r = run(python_exe, scripts_dir / "analyze.py", cwd=fixtures)
+    assert code == 1
+    assert "No filename was given" in r["error"]
+    assert "gather" in r["error"]
+
+
+def test_analyze_no_filename_uses_last_gathered_file(python_exe, scripts_dir, tmp_path):
+    (tmp_path / "northwind_customers.csv").write_bytes((REAL_DATA_DIR / "northwind_customers.csv").read_bytes())
+    (tmp_path / "northwind_orders.csv").write_bytes((REAL_DATA_DIR / "northwind_orders.csv").read_bytes())
+
+    gather_code, gather_report = run(
+        python_exe, scripts_dir / "gather.py", "northwind_customers.csv", "northwind_orders.csv", cwd=tmp_path
+    )
+    assert gather_code == 0, gather_report
+
+    analyze_code, analyze_report = run(python_exe, scripts_dir / "analyze.py", cwd=tmp_path)
+    assert analyze_code == 0, analyze_report
+    expected = str(tmp_path / gather_report["gathered_file"])
+    assert analyze_report["used_last_gathered_file"] == expected
+    assert analyze_report["file"] == expected
+
+
+def test_analyze_friendly_errors(python_exe, scripts_dir, fixtures):
+    code, r = run(python_exe, scripts_dir / "analyze.py", "does_not_exist.csv", cwd=fixtures)
+    assert code == 1
+    assert "Couldn't find a file" in r["error"]
+
+
+def test_analyze_warns_on_zero_row_file_instead_of_crashing(python_exe, scripts_dir, tmp_path):
+    (tmp_path / "headers_only.csv").write_text("a,b,c\n")
+    code, r = run(python_exe, scripts_dir / "analyze.py", "headers_only.csv", cwd=tmp_path)
+    assert code == 0
+    assert "warning" in r
+    assert r["correlations"] == [] and r["trends"] is None and r["group_comparisons"] == [] and r["outliers"] == {}

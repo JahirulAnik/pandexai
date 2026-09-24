@@ -134,29 +134,31 @@ def read_last_gathered_state(cwd):
     except (OSError, json.JSONDecodeError):
         return None
 
-def resolve_input_path(argv, cwd):
+def resolve_input_path(argv, cwd, script_name="clean.py"):
     """Given sys.argv[1:] and the current working directory, returns the
-    file clean should operate on, or raises ValueError with a message
+    file the command should operate on, or raises ValueError with a message
     meant to be shown to the user as-is.
 
     - One filename given: use it.
     - No filename given: fall back to whatever gather last combined, so
-      "/pandex clean" alone can pick up straight where "/pandex gather"
-      left off.
-    - Anything else (2+ filenames): clean only ever works on one file at a
-      time, so this is a usage error.
+      the command can pick up straight where "/pandex gather" left off.
+    - Anything else (2+ filenames): these commands only ever work on one
+      file at a time, so this is a usage error.
+
+    `script_name` lets other commands (analyze.py) reuse this exact
+    fallback behavior while keeping their own name in the error text.
     """
     if len(argv) == 1:
         return argv[0]
 
     if len(argv) > 1:
-        raise ValueError("Usage: python clean.py <path-to-file>")
+        raise ValueError(f"Usage: python {script_name} <path-to-file>")
 
     last_gathered = read_last_gathered_state(cwd)
     if not last_gathered:
         raise ValueError(
             "No filename was given, and there's no record of a previous "
-            "gather to fall back on. Run 'python clean.py <path-to-file>', "
+            f"gather to fall back on. Run 'python {script_name} <path-to-file>', "
             "or run gather first."
         )
 
@@ -166,7 +168,7 @@ def resolve_input_path(argv, cwd):
         raise ValueError(
             f"No filename was given, and the last gathered file "
             f"('{last_gathered}') no longer exists. Run "
-            f"'python clean.py <path-to-file>' instead."
+            f"'python {script_name} <path-to-file>' instead."
         )
     return candidate
 

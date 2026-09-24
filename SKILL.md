@@ -38,4 +38,9 @@ with the wrong number of fields were left out). Always relay those.
 - gather - combines two or more files into one workbook, joining on a
   column with real value overlap or keeping them as linked sheets. See
   commands/gather.md.
-- analyze - planned, not built yet.
+- profile - read-only per-column statistics and data-quality signals for a
+  single file (nulls, blanks, casing, duplicates). Nothing is written to
+  disk. See commands/profile.md.
+- analyze - the full read-only analysis: everything profile reports, plus
+  correlations, trends over time, group comparisons, and outlier flagging.
+  Nothing is written to disk. See commands/analyze.md.

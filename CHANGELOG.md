@@ -23,8 +23,23 @@ All notable changes to this project are documented here. The format follows
   as a change; more visible under pandas 3's `str` dtype).
 - `npx pandex init` success message referenced the removed `scan` command.
 - npm tarball no longer includes `__pycache__` bytecode.
+- `clean`'s no-filename fallback could return a path with mixed `\` and `/` separators
+  on Windows, since joining a path doesn't normalize slashes already inside a string.
+  Fixed with `os.path.normpath`.
 
 ### Added
+- `/pandex profile <file>`: read-only per-column statistics and data-quality signals
+  (nulls, blank-like values, inconsistent casing, duplicate values) for a single file.
+  Nothing is written to disk.
+- `/pandex analyze [file]`: the full read-only analysis - everything `profile` reports,
+  plus correlations between numeric columns, trends over time (when a date column is
+  found, bucketed into an auto-picked day/week/month/year period), group-by comparisons
+  ("average order value by region"), and outlier flagging (IQR fences). Falls back to
+  the last gathered file when run with no filename, same as `clean`.
+- `gather` with no filenames auto-discovers every CSV/Excel/JSON file in the project
+  folder and combines them, instead of requiring filenames every time.
+- `gather` remembers its own output, so `clean` and `analyze` run with no filename
+  automatically pick up and operate on whatever `gather` last produced.
 - CSV files with a few malformed lines (unquoted commas, typical of SQL exports) are
   read anyway; the lines are skipped and reported as `malformed_rows_skipped` and
   `malformed_row_numbers`. `gather` reports the same per file under `file_notes`.
