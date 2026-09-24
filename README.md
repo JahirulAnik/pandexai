@@ -4,23 +4,26 @@
 [![npm](https://img.shields.io/npm/v/pandexai)](https://www.npmjs.com/package/pandexai)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-**Clean messy data files from inside your AI coding CLI, with numbers you can trust.**
+**Clean, combine, and analyze data files from inside your AI coding CLI, with numbers you can trust.**
 
-PandexAI runs inside Claude Code, Cursor and similar tools. You type
-`/pandex clean sales.csv`; a real pandas script deduplicates, trims, normalises
-and fills the file, writes the results to Excel, and prints one JSON report. The
-AI never touches the numbers. It only reads the report and explains it to you.
+PandexAI runs inside Claude Code, Cursor and similar tools. You type a command like
+`/pandex clean sales.csv`; a real pandas script does the work, deterministically, and
+prints one JSON report. The AI never recomputes or estimates a number — it only reads
+the report and explains it to you in plain English.
 
 ```
-/pandex clean sales.csv
-/pandex gather orders.csv customers.csv
-/pandex profile sales.csv
-/pandex analyze orders.csv
+/pandex clean sales.csv                    # fix it: duplicates, missing values, formatting
+/pandex gather orders.csv customers.csv    # combine files into one workbook
+/pandex profile sales.csv                  # per-column stats and data-quality signals
+/pandex analyze orders.csv                 # correlations, trends, group comparisons, outliers
 ```
 
 - **Input:** any `.csv`, `.xlsx`, `.xls` or `.json` file. Originals are never modified.
-- **Output:** a `<name>_cleaned_results/` folder with `cleaned.xlsx` plus review files
-  for everything that was changed or could not be fixed automatically.
+- **`clean`/`gather`** write their results to a new folder next to the input file.
+  **`profile`/`analyze`** are read-only — nothing is written to disk.
+- **No filename?** `clean` and `analyze` automatically pick up whatever `gather` last
+  produced in the project, so a `gather` → `clean` → `analyze` chain needs a filename
+  only once.
 - **Tested on real data:** UCI Adult, UCI Automobile, Titanic, OpenFlights and
   Northwind are in the repository and checked on every commit. See the results below.
 
@@ -38,11 +41,11 @@ flowchart LR
     style AI fill:#8957e5,color:#fff,stroke:none
 ```
 
-The project is built around one rule, written into `SKILL.md` so the AI reads it first:
+Every command follows the same shape, written into `SKILL.md` so the AI reads it first:
 
 | | Who | Where |
 |---|---|---|
-| **Execution**: anything that computes a number (counts, medians, joins) | Python / pandas, deterministically | `scripts/` |
+| **Execution**: anything that computes a number (counts, medians, correlations, joins) | Python / pandas, deterministically | `scripts/` |
 | **Judgment**: interpreting the report, deciding what matters, explaining it | The AI | `SKILL.md`, `commands/*.md` |
 
 Every script prints a single JSON object and exits 0 on success, or exits 1 with
@@ -103,7 +106,8 @@ When the tool is unsure, it leaves the data alone and lets the AI flag it.
 
 Combines files into one workbook. A column is used as the join key only if its
 **values** overlap across every file, not just its name. Two files that both have a
-`notes` column will not be joined on it.
+`notes` column will not be joined on it. Run with no filenames and it auto-discovers
+every CSV/Excel/JSON file in the project folder instead.
 
 ```mermaid
 flowchart LR
@@ -114,6 +118,27 @@ flowchart LR
     D -- no --> F["One sheet per file<br/>in the same workbook"]
     E & F --> G[("<first file>_gathered_results/gathered.xlsx")]
 ```
+
+## `profile <file>`
+
+A quick, read-only look at one file before deciding what to do with it. Reports, per
+column: null percentage, unique-value count, mean/median/min/max for numeric columns,
+top values for categorical ones, blank-like value counts, inconsistent casing, and
+duplicate values. Nothing is written to disk.
+
+## `analyze [file]`
+
+Everything `profile` reports, plus the next questions a data analyst would ask:
+
+| Analysis | What it does |
+|---|---|
+| **Correlations** | Pearson correlation between every pair of numeric columns (ID-like columns excluded), strongest pairs first |
+| **Trends over time** | If a date column is found, buckets rows into an auto-picked period (day/week/month/year, based on how much time the data spans) and reports the first-vs-last period change, direction, and percent change |
+| **Group comparisons** | For every categorical-shaped column, compares each numeric column's average across groups (e.g. "average order value by region"), highlighting the highest- and lowest-scoring group |
+| **Outliers** | Classic IQR fences (1.5x interquartile range beyond Q1/Q3) per numeric column, with counts, percentages, and example values |
+
+Falls back to the last file `gather` produced when run with no filename, same as
+`clean`. Entirely read-only.
 
 ## Results on real data
 
@@ -138,12 +163,7 @@ recognised as missing values at all.
 
 **Works today**
 
-- `clean` and `gather` as described above, on CSV, Excel and JSON.
-- `profile`: read-only per-column statistics for a single file (nulls, blank-like
-  values, casing issues, duplicate values) - nothing is written to disk.
-- `analyze`: everything `profile` reports, plus correlations between numeric columns,
-  trends over time (when a date column exists), group-by comparisons, and outlier
-  flagging (IQR fences) - also read-only.
+- `clean`, `gather`, `profile` and `analyze`, as described above, on CSV, Excel and JSON.
 - Non-UTF-8 files fall back to latin-1 and say so in the report.
 - Malformed CSV lines are skipped and reported by line number instead of failing the file.
 - Every JSON field the AI is told to present is covered by a test.
